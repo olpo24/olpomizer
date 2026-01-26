@@ -1,12 +1,6 @@
-<?php
 /**
  * SMTP Modul
  */
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-
 class CWO_SMTP_Module extends CWO_Module_Base {
     
     public function __construct() {
@@ -35,7 +29,6 @@ class CWO_SMTP_Module extends CWO_Module_Base {
         $from_email = $this->get_option('from_email');
         $from_name = $this->get_option('from_name');
         
-        // Nur konfigurieren wenn Host gesetzt ist
         if (empty($smtp_host)) {
             return;
         }
@@ -140,21 +133,33 @@ class CWO_SMTP_Module extends CWO_Module_Base {
             <span id="smtp-test-result"></span>
         </div>
         
-        <script>
+        <script type="text/javascript">
         function cwoTestSMTP() {
             var result = document.getElementById('smtp-test-result');
-            result.textContent = 'Sende...';
+            result.textContent = ' Sende...';
+            result.style.color = '#000';
             
-            fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: 'action=cwo_test_smtp&nonce=<?php echo wp_create_nonce('cwo_test_smtp'); ?>'
-            })
-            .then(response => response.json())
-            .then(data => {
-                result.textContent = data.message;
-                result.style.color = data.success ? 'green' : 'red';
-            });
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        result.textContent = ' ' + data.message;
+                        result.style.color = data.success ? 'green' : 'red';
+                    } catch(e) {
+                        result.textContent = ' Fehler beim Parsen der Antwort';
+                        result.style.color = 'red';
+                    }
+                } else {
+                    result.textContent = ' Fehler bei der Anfrage';
+                    result.style.color = 'red';
+                }
+            };
+            
+            xhr.send('action=cwo_test_smtp&nonce=<?php echo wp_create_nonce('cwo_test_smtp'); ?>');
         }
         </script>
         <?php
@@ -179,7 +184,7 @@ class CWO_SMTP_Module extends CWO_Module_Base {
             $this->update_option('username', sanitize_text_field($post_data['cwo_smtp_username']));
         }
         if (isset($post_data['cwo_smtp_password'])) {
-            $this->update_option('password', $post_data['cwo_smtp_password']); // Nicht sanitizen, da Sonderzeichen erlaubt
+            $this->update_option('password', $post_data['cwo_smtp_password']);
         }
         if (isset($post_data['cwo_smtp_from_email'])) {
             $this->update_option('from_email', sanitize_email($post_data['cwo_smtp_from_email']));

@@ -9,7 +9,6 @@
  * Text Domain: olpomizer
  * Domain Path: /languages
  */
-
 // Sicherheit: Direkten Zugriff verhindern
 if (!defined('ABSPATH')) {
     exit;

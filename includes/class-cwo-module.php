@@ -1,12 +1,6 @@
-<?php
 /**
  * Basis-Klasse für alle Module
  */
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-
 abstract class CWO_Module_Base {
     
     protected $id;
@@ -43,7 +37,6 @@ abstract class CWO_Module_Base {
      * Settings-Felder rendern (optional)
      */
     public function render_settings() {
-        // Überschreiben wenn Modul eigene Settings hat
         echo '<p>Keine zusätzlichen Einstellungen verfügbar.</p>';
     }
     

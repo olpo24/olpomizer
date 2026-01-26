@@ -212,7 +212,5 @@ class CWO_Admin {
     
     add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
     settings_errors('cwo_messages');
-}
-        settings_errors('cwo_messages');
     }
 }

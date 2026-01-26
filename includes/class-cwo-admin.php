@@ -187,19 +187,32 @@ class CWO_Admin {
      * Einstellungen speichern
      */
     private function save_settings() {
-        // Module Status speichern
-        $modules = isset($_POST['cwo_modules']) ? $_POST['cwo_modules'] : array();
-        update_option('cwo_modules', $modules);
-        
-        // Modulspezifische Settings speichern
-        $optimizer = Custom_WP_Optimizer::get_instance();
-        foreach ($optimizer->get_modules() as $module_id => $module) {
-            if (isset($modules[$module_id]) && $modules[$module_id] === '1') {
-                $module->save_settings($_POST);
-            }
+    // Wichtig: Zuerst ALLE Module auf deaktiviert setzen
+    $all_modules = array();
+    $optimizer = Custom_WP_Optimizer::get_instance();
+    foreach ($optimizer->get_modules() as $module_id => $module) {
+        $all_modules[$module_id] = '0';
+    }
+    
+    // Dann nur die aktivierten Module auf '1' setzen
+    if (isset($_POST['cwo_modules']) && is_array($_POST['cwo_modules'])) {
+        foreach ($_POST['cwo_modules'] as $module_id => $value) {
+            $all_modules[$module_id] = '1';
         }
-        
-        add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
+    }
+    
+    update_option('cwo_modules', $all_modules);
+    
+    // Modulspezifische Settings speichern (nur für aktive Module)
+    foreach ($optimizer->get_modules() as $module_id => $module) {
+        if (isset($all_modules[$module_id]) && $all_modules[$module_id] === '1') {
+            $module->save_settings($_POST);
+        }
+    }
+    
+    add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
+    settings_errors('cwo_messages');
+}
         settings_errors('cwo_messages');
     }
 }

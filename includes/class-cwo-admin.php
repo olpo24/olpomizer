@@ -1,12 +1,6 @@
-<?php
 /**
  * Admin-Interface für das Plugin
  */
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-
 class CWO_Admin {
     
     public function __construct() {
@@ -33,12 +27,6 @@ class CWO_Admin {
      */
     public function register_settings() {
         register_setting('cwo_modules_group', 'cwo_modules');
-        
-        // Settings für jedes Modul registrieren
-        $optimizer = Custom_WP_Optimizer::get_instance();
-        foreach ($optimizer->get_modules() as $module_id => $module) {
-            // Hier können modulspezifische Settings registriert werden
-        }
     }
     
     /**
@@ -49,7 +37,6 @@ class CWO_Admin {
             return;
         }
         
-        // Inline-CSS für besseres Styling
         wp_add_inline_style('wp-admin', '
             .cwo-module-card {
                 background: #fff;
@@ -78,6 +65,10 @@ class CWO_Admin {
                 background: #f6f7f7;
                 border-radius: 4px;
                 margin-top: 15px;
+                display: none;
+            }
+            .cwo-module-settings.active {
+                display: block;
             }
             .cwo-toggle {
                 position: relative;
@@ -142,7 +133,7 @@ class CWO_Admin {
         <div class="wrap">
             <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
             
-            <form method="post" action="">
+            <form method="post" action="" id="cwo-settings-form">
                 <?php wp_nonce_field('cwo_settings_nonce'); ?>
                 
                 <h2 class="nav-tab-wrapper">
@@ -153,26 +144,25 @@ class CWO_Admin {
                     <?php foreach ($modules as $module_id => $module): 
                         $is_enabled = isset($enabled_modules[$module_id]) && $enabled_modules[$module_id] === '1';
                     ?>
-                        <div class="cwo-module-card">
+                        <div class="cwo-module-card" data-module-id="<?php echo esc_attr($module_id); ?>">
                             <div class="cwo-module-header">
                                 <h3 class="cwo-module-title"><?php echo esc_html($module->get_name()); ?></h3>
                                 <label class="cwo-toggle">
                                     <input type="checkbox" 
+                                           class="cwo-module-toggle"
                                            name="cwo_modules[<?php echo esc_attr($module_id); ?>]" 
                                            value="1" 
-                                           <?php checked($is_enabled); ?>
-                                           onchange="this.form.submit()">
+                                           data-module-id="<?php echo esc_attr($module_id); ?>"
+                                           <?php checked($is_enabled); ?>>
                                     <span class="cwo-toggle-slider"></span>
                                 </label>
                             </div>
                             <p class="cwo-module-description"><?php echo esc_html($module->get_description()); ?></p>
                             
-                            <?php if ($is_enabled): ?>
-                                <div class="cwo-module-settings">
-                                    <h4>Einstellungen</h4>
-                                    <?php $module->render_settings(); ?>
-                                </div>
-                            <?php endif; ?>
+                            <div class="cwo-module-settings <?php echo $is_enabled ? 'active' : ''; ?>">
+                                <h4>Einstellungen</h4>
+                                <?php $module->render_settings(); ?>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -180,6 +170,50 @@ class CWO_Admin {
                 <?php submit_button('Einstellungen speichern', 'primary', 'cwo_save_settings'); ?>
             </form>
         </div>
+        
+        <script type="text/javascript">
+        (function() {
+            'use strict';
+            
+            document.addEventListener('DOMContentLoaded', function() {
+                var form = document.getElementById('cwo-settings-form');
+                var toggles = document.querySelectorAll('.cwo-module-toggle');
+                
+                // Verhindere automatisches Submit des gesamten Forms
+                if (form) {
+                    form.addEventListener('submit', function(e) {
+                        // Nur erlauben wenn Save-Button geklickt wurde
+                        if (!e.submitter || e.submitter.name !== 'cwo_save_settings') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return false;
+                        }
+                    });
+                }
+                
+                // Toggle-Handler für alle Module
+                toggles.forEach(function(toggle) {
+                    toggle.addEventListener('click', function(e) {
+                        var moduleId = this.getAttribute('data-module-id');
+                        var card = document.querySelector('[data-module-id="' + moduleId + '"].cwo-module-card');
+                        
+                        if (!card) return;
+                        
+                        var settings = card.querySelector('.cwo-module-settings');
+                        
+                        // Timeout damit der Checkbox-Status korrekt ist
+                        setTimeout(function() {
+                            if (toggle.checked) {
+                                settings.classList.add('active');
+                            } else {
+                                settings.classList.remove('active');
+                            }
+                        }, 10);
+                    });
+                });
+            });
+        })();
+        </script>
         <?php
     }
     
@@ -187,30 +221,33 @@ class CWO_Admin {
      * Einstellungen speichern
      */
     private function save_settings() {
-    // Wichtig: Zuerst ALLE Module auf deaktiviert setzen
-    $all_modules = array();
-    $optimizer = Custom_WP_Optimizer::get_instance();
-    foreach ($optimizer->get_modules() as $module_id => $module) {
-        $all_modules[$module_id] = '0';
-    }
-    
-    // Dann nur die aktivierten Module auf '1' setzen
-    if (isset($_POST['cwo_modules']) && is_array($_POST['cwo_modules'])) {
-        foreach ($_POST['cwo_modules'] as $module_id => $value) {
-            $all_modules[$module_id] = '1';
+        $optimizer = Custom_WP_Optimizer::get_instance();
+        $all_modules = array();
+        
+        // Alle Module auf deaktiviert setzen
+        foreach ($optimizer->get_modules() as $module_id => $module) {
+            $all_modules[$module_id] = '0';
         }
-    }
-    
-    update_option('cwo_modules', $all_modules);
-    
-    // Modulspezifische Settings speichern (nur für aktive Module)
-    foreach ($optimizer->get_modules() as $module_id => $module) {
-        if (isset($all_modules[$module_id]) && $all_modules[$module_id] === '1') {
-            $module->save_settings($_POST);
+        
+        // Aktivierte Module setzen
+        if (isset($_POST['cwo_modules']) && is_array($_POST['cwo_modules'])) {
+            foreach ($_POST['cwo_modules'] as $module_id => $value) {
+                if ($value === '1') {
+                    $all_modules[$module_id] = '1';
+                }
+            }
         }
-    }
-    
-    add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
-    settings_errors('cwo_messages');
+        
+        update_option('cwo_modules', $all_modules);
+        
+        // Modulspezifische Settings speichern
+        foreach ($optimizer->get_modules() as $module_id => $module) {
+            if ($all_modules[$module_id] === '1') {
+                $module->save_settings($_POST);
+            }
+        }
+        
+        add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
+        settings_errors('cwo_messages');
     }
 }

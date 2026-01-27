@@ -1,6 +1,12 @@
+<?php
 /**
  * Basis-Klasse für alle Module
  */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 abstract class CWO_Module_Base {
     
     protected $id;

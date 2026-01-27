@@ -68,6 +68,7 @@ class Custom_WP_Optimizer {
     private function init_modules() {
         // SMTP Modul registrieren
         $this->register_module('smtp', new CWO_SMTP_Module());
+        $this->register_module('debug', new CWO_Debug_Module());
         
         // Hier können weitere Module registriert werden
         // $this->register_module('image-optimization', new CWO_Image_Module());

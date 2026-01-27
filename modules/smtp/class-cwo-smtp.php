@@ -146,4 +146,73 @@ class CWO_SMTP_Module extends CWO_Module_Base {
             result.style.color = '#000';
             
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', '<?php echo admin_url('admin-aja
+            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        var data = JSON.parse(xhr.responseText);
+                        result.textContent = ' ' + data.message;
+                        result.style.color = data.success ? 'green' : 'red';
+                    } catch(e) {
+                        result.textContent = ' Fehler beim Parsen der Antwort';
+                        result.style.color = 'red';
+                    }
+                } else {
+                    result.textContent = ' Fehler bei der Anfrage';
+                    result.style.color = 'red';
+                }
+            };
+            
+            xhr.send('action=cwo_test_smtp&nonce=<?php echo wp_create_nonce('cwo_test_smtp'); ?>');
+        }
+        </script>
+        <?php
+    }
+    
+    /**
+     * Settings speichern
+     */
+    public function save_settings($post_data) {
+        if (isset($post_data['cwo_smtp_host'])) {
+            $this->update_option('host', sanitize_text_field($post_data['cwo_smtp_host']));
+        }
+        if (isset($post_data['cwo_smtp_port'])) {
+            $this->update_option('port', sanitize_text_field($post_data['cwo_smtp_port']));
+        }
+        if (isset($post_data['cwo_smtp_encryption'])) {
+            $this->update_option('encryption', sanitize_text_field($post_data['cwo_smtp_encryption']));
+        }
+        $this->update_option('auth', isset($post_data['cwo_smtp_auth']) ? '1' : '0');
+        
+        if (isset($post_data['cwo_smtp_username'])) {
+            $this->update_option('username', sanitize_text_field($post_data['cwo_smtp_username']));
+        }
+        if (isset($post_data['cwo_smtp_password'])) {
+            $this->update_option('password', $post_data['cwo_smtp_password']);
+        }
+        if (isset($post_data['cwo_smtp_from_email'])) {
+            $this->update_option('from_email', sanitize_email($post_data['cwo_smtp_from_email']));
+        }
+        if (isset($post_data['cwo_smtp_from_name'])) {
+            $this->update_option('from_name', sanitize_text_field($post_data['cwo_smtp_from_name']));
+        }
+    }
+}
+
+// AJAX Handler für Test-E-Mail
+add_action('wp_ajax_cwo_test_smtp', function() {
+    check_ajax_referer('cwo_test_smtp', 'nonce');
+    
+    $to = get_option('admin_email');
+    $subject = 'SMTP Test von Custom WP Optimizer';
+    $message = 'Dies ist eine Test-E-Mail. Wenn du diese E-Mail erhalten hast, funktioniert deine SMTP-Konfiguration korrekt!';
+    
+    $result = wp_mail($to, $subject, $message);
+    
+    wp_send_json(array(
+        'success' => $result,
+        'message' => $result ? 'Test-E-Mail erfolgreich versendet!' : 'Fehler beim Versenden der Test-E-Mail.'
+    ));
+});

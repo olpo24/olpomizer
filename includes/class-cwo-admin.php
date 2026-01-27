@@ -1,6 +1,12 @@
+<?php
 /**
  * Admin-Interface für das Plugin
  */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 class CWO_Admin {
     
     public function __construct() {
@@ -193,22 +199,21 @@ class CWO_Admin {
                 
                 // Toggle-Handler für alle Module
                 toggles.forEach(function(toggle) {
-                    toggle.addEventListener('click', function(e) {
+                    toggle.addEventListener('change', function(e) {
                         var moduleId = this.getAttribute('data-module-id');
                         var card = document.querySelector('[data-module-id="' + moduleId + '"].cwo-module-card');
                         
                         if (!card) return;
                         
                         var settings = card.querySelector('.cwo-module-settings');
+                        var checkbox = this;
                         
-                        // Timeout damit der Checkbox-Status korrekt ist
-                        setTimeout(function() {
-                            if (toggle.checked) {
-                                settings.classList.add('active');
-                            } else {
-                                settings.classList.remove('active');
-                            }
-                        }, 10);
+                        // Sofort nach dem Change prüfen
+                        if (checkbox.checked) {
+                            settings.classList.add('active');
+                        } else {
+                            settings.classList.remove('active');
+                        }
                     });
                 });
             });

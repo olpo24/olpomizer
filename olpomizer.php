@@ -59,6 +59,7 @@ class Custom_WP_Optimizer {
         
         // Verfügbare Module laden
         require_once CWO_PLUGIN_DIR . 'modules/smtp/class-cwo-smtp.php';
+        require_once CWO_PLUGIN_DIR . 'modules/debug/class-cwo-debug.php';
     }
     
     /**

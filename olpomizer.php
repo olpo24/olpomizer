@@ -3,7 +3,7 @@
  * Plugin Name: OlpoMizer
  * Plugin URI: https://olpo.de
  * Description: Modulares WordPress Optimierungs-Plugin mit konfigurierbaren Features
- * Version: 1.1.1
+ * Version: 1.2.0
  * Author: Ole 
  * Author URI: https://olpo.de
  * Text Domain: olpomizer
@@ -120,6 +120,7 @@ class Custom_WP_Optimizer {
         // Verfügbare Module laden
         require_once CWO_PLUGIN_DIR . 'modules/smtp/class-cwo-smtp.php';
         require_once CWO_PLUGIN_DIR . 'modules/debug/class-cwo-debug.php';
+        require_once CWO_PLUGIN_DIR . 'modules/performance/class-cwo-performance.php'
     }
     
     /**
@@ -129,10 +130,11 @@ class Custom_WP_Optimizer {
         // SMTP Modul registrieren
         $this->register_module('smtp', new CWO_SMTP_Module());
         $this->register_module('debug', new CWO_Debug_Module());
-        
+        $this->register_module('performance', new CWO_Performance_Module());
         // Hier können weitere Module registriert werden
         // $this->register_module('image-optimization', new CWO_Image_Module());
         // $this->register_module('disable-features', new CWO_Disable_Module());
+            
     }
     
     /**

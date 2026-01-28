@@ -198,6 +198,11 @@ class CWO_Admin {
                 background: #f6f7f7;
                 border-radius: 4px;
                 margin-top: 15px;
+                display: none;
+            }
+            
+            .olpo-module-settings.show {
+                display: block;
             }
             
             /* Toggle Switch */
@@ -416,14 +421,12 @@ class CWO_Admin {
                                                         </div>
                                                         <p class="olpo-module-description"><?php echo esc_html($module->get_description()); ?></p>
                                                         
-                                                        <?php if ($is_enabled): ?>
-                                                            <div class="olpo-module-settings">
-                                                                <?php 
-                                                                // Nur Settings rendern, nicht den Log Viewer
-                                                                $this->render_debug_settings_only($module);
-                                                                ?>
-                                                            </div>
-                                                        <?php endif; ?>
+                                                        <div class="olpo-module-settings <?php echo $is_enabled ? 'show' : ''; ?>">
+                                                            <?php 
+                                                            // Nur Settings rendern, nicht den Log Viewer
+                                                            $this->render_debug_settings_only($module);
+                                                            ?>
+                                                        </div>
                                                     </div>
                                                 <?php endforeach; ?>
                                                 
@@ -476,11 +479,9 @@ class CWO_Admin {
                                             </div>
                                             <p class="olpo-module-description"><?php echo esc_html($module->get_description()); ?></p>
                                             
-                                            <?php if ($is_enabled): ?>
-                                                <div class="olpo-module-settings">
-                                                    <?php $module->render_settings(); ?>
-                                                </div>
-                                            <?php endif; ?>
+                                            <div class="olpo-module-settings <?php echo $is_enabled ? 'show' : ''; ?>">
+                                                <?php $module->render_settings(); ?>
+                                            </div>
                                         </div>
                                     <?php endforeach; ?>
                                 </div>
@@ -525,7 +526,6 @@ class CWO_Admin {
                 
                 // Sidebar Navigation
                 var sidebarItems = document.querySelectorAll('.olpo-sidebar-item');
-                var sections = document.querySelectorAll('.olpo-section');
                 
                 sidebarItems.forEach(function(item) {
                     item.addEventListener('click', function(e) {
@@ -545,7 +545,10 @@ class CWO_Admin {
                         
                         // Aktives Item und Section aktivieren
                         this.classList.add('active');
-                        parentTab.querySelector('.olpo-section[data-section="' + targetSection + '"]').classList.add('active');
+                        var targetSectionElement = parentTab.querySelector('.olpo-section[data-section="' + targetSection + '"]');
+                        if (targetSectionElement) {
+                            targetSectionElement.classList.add('active');
+                        }
                     });
                 });
                 
@@ -565,16 +568,15 @@ class CWO_Admin {
                 
                 toggles.forEach(function(toggle) {
                     toggle.addEventListener('change', function(e) {
-                        var moduleId = this.getAttribute('data-module-id');
                         var card = this.closest('.olpo-module-card');
                         var settings = card.querySelector('.olpo-module-settings');
                         
                         if (!settings) return;
                         
                         if (this.checked) {
-                            settings.style.display = 'block';
+                            settings.classList.add('show');
                         } else {
-                            settings.style.display = 'none';
+                            settings.classList.remove('show');
                         }
                     });
                 });

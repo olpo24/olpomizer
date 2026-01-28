@@ -20,6 +20,15 @@ class CWO_SMTP_Module extends CWO_Module_Base {
      */
     public function init() {
         add_action('phpmailer_init', array($this, 'configure_smtp'));
+        
+        // Email Logging aktivieren
+        add_action('wp_mail_succeeded', array($this, 'log_email_success'), 10, 1);
+        add_action('wp_mail_failed', array($this, 'log_email_failure'), 10, 1);
+        
+        // AJAX Handlers für Email Log
+        add_action('wp_ajax_cwo_get_email_log', array($this, 'ajax_get_email_log'));
+        add_action('wp_ajax_cwo_get_email_detail', array($this, 'ajax_get_email_detail'));
+        add_action('wp_ajax_cwo_clear_email_log', array($this, 'ajax_clear_email_log'));
     }
     
     /**
@@ -199,6 +208,117 @@ class CWO_SMTP_Module extends CWO_Module_Base {
             $this->update_option('from_name', sanitize_text_field($post_data['cwo_smtp_from_name']));
         }
     }
+    
+    /**
+     * Email Erfolg loggen
+     */
+    public function log_email_success($mail_data) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'cwo_email_log';
+        
+        $wpdb->insert(
+            $table_name,
+            array(
+                'to_email' => is_array($mail_data['to']) ? implode(', ', $mail_data['to']) : $mail_data['to'],
+                'subject' => $mail_data['subject'],
+                'message' => $mail_data['message'],
+                'headers' => is_array($mail_data['headers']) ? implode("\n", $mail_data['headers']) : $mail_data['headers'],
+                'status' => 'success',
+                'error_message' => '',
+                'sent_time' => current_time('mysql')
+            ),
+            array('%s', '%s', '%s', '%s', '%s', '%s', '%s')
+        );
+    }
+    
+    /**
+     * Email Fehler loggen
+     */
+    public function log_email_failure($wp_error) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'cwo_email_log';
+        
+        $mail_data = $wp_error->get_error_data();
+        
+        $wpdb->insert(
+            $table_name,
+            array(
+                'to_email' => is_array($mail_data['to']) ? implode(', ', $mail_data['to']) : $mail_data['to'],
+                'subject' => $mail_data['subject'],
+                'message' => $mail_data['message'],
+                'headers' => is_array($mail_data['headers']) ? implode("\n", $mail_data['headers']) : $mail_data['headers'],
+                'status' => 'failed',
+                'error_message' => $wp_error->get_error_message(),
+                'sent_time' => current_time('mysql')
+            ),
+            array('%s', '%s', '%s', '%s', '%s', '%s', '%s')
+        );
+    }
+    
+    /**
+     * Email Log abrufen (AJAX)
+     */
+    public function ajax_get_email_log() {
+        check_ajax_referer('cwo_email_log_nonce', 'nonce');
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'cwo_email_log';
+        
+        $emails = $wpdb->get_results(
+            "SELECT id, to_email as `to`, subject, status, error_message as error, sent_time as time 
+             FROM $table_name 
+             ORDER BY id DESC 
+             LIMIT 100",
+            ARRAY_A
+        );
+        
+        // Zeit formatieren
+        foreach ($emails as &$email) {
+            $email['time'] = date_i18n('d.m.Y H:i:s', strtotime($email['time']));
+        }
+        
+        wp_send_json_success(array('emails' => $emails));
+    }
+    
+    /**
+     * Email Details abrufen (AJAX)
+     */
+    public function ajax_get_email_detail() {
+        check_ajax_referer('cwo_email_log_nonce', 'nonce');
+        
+        $email_id = intval($_POST['email_id']);
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'cwo_email_log';
+        
+        $email = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $email_id),
+            ARRAY_A
+        );
+        
+        if ($email) {
+            $email['time'] = date_i18n('d.m.Y H:i:s', strtotime($email['sent_time']));
+            $email['to'] = $email['to_email'];
+            $email['error'] = $email['error_message'];
+            wp_send_json_success($email);
+        } else {
+            wp_send_json_error(array('message' => 'E-Mail nicht gefunden.'));
+        }
+    }
+    
+    /**
+     * Email Log löschen (AJAX)
+     */
+    public function ajax_clear_email_log() {
+        check_ajax_referer('cwo_email_log_nonce', 'nonce');
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'cwo_email_log';
+        
+        $wpdb->query("TRUNCATE TABLE $table_name");
+        
+        wp_send_json_success(array('message' => 'E-Mail Log gelöscht.'));
+    }
 }
 
 // AJAX Handler für Test-E-Mail
@@ -206,7 +326,7 @@ add_action('wp_ajax_cwo_test_smtp', function() {
     check_ajax_referer('cwo_test_smtp', 'nonce');
     
     $to = get_option('admin_email');
-    $subject = 'SMTP Test von Custom WP Optimizer';
+    $subject = 'SMTP Test von OlpoMizer';
     $message = 'Dies ist eine Test-E-Mail. Wenn du diese E-Mail erhalten hast, funktioniert deine SMTP-Konfiguration korrekt!';
     
     $result = wp_mail($to, $subject, $message);

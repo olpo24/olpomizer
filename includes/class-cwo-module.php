@@ -56,21 +56,21 @@ abstract class CWO_Module_Base {
     /**
      * Option-Key für dieses Modul generieren
      */
-    protected function get_option_name($key) {
+    public function get_option_name($key) {
         return 'cwo_' . $this->id . '_' . $key;
     }
     
     /**
      * Option abrufen
      */
-    protected function get_option($key, $default = '') {
+    public function get_option($key, $default = '') {
         return get_option($this->get_option_name($key), $default);
     }
     
     /**
      * Option speichern
      */
-    protected function update_option($key, $value) {
+    public function update_option($key, $value) {
         return update_option($this->get_option_name($key), $value);
     }
 }

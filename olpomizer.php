@@ -193,6 +193,27 @@ register_activation_hook(__FILE__, function() {
     if (!get_option('cwo_modules')) {
         add_option('cwo_modules', array());
     }
+    
+    // Email Log Tabelle erstellen
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'cwo_email_log';
+    $charset_collate = $wpdb->get_charset_collate();
+    
+    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        to_email varchar(255) NOT NULL,
+        subject text NOT NULL,
+        message longtext NOT NULL,
+        headers text,
+        status varchar(20) NOT NULL,
+        error_message text,
+        sent_time datetime NOT NULL,
+        PRIMARY KEY (id),
+        KEY sent_time (sent_time)
+    ) $charset_collate;";
+    
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
 });
 
 /**

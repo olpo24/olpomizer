@@ -593,7 +593,32 @@ add_action('wp_ajax_cwo_clear_cache', array($this, 'ajax_clear_cache'));
         if (isset($post_data['cwo_perf_empty_trash_days'])) {
             $this->update_option('empty_trash_days', intval($post_data['cwo_perf_empty_trash_days']));
         }
+    $cache_enabled_old = $this->get_option('cache_enabled', '0');
+    $cache_enabled_new = isset($post_data['cwo_cache_enabled']) ? '1' : '0';
+    $this->update_option('cache_enabled', $cache_enabled_new);
+    
+    if (isset($post_data['cwo_cache_exclude_urls'])) {
+        $this->update_option('cache_exclude_urls', sanitize_textarea_field($post_data['cwo_cache_exclude_urls']));
     }
+    if (isset($post_data['cwo_cache_exclude_css'])) {
+        $this->update_option('cache_exclude_css', sanitize_textarea_field($post_data['cwo_cache_exclude_css']));
+    }
+    if (isset($post_data['cwo_cache_exclude_js'])) {
+        $this->update_option('cache_exclude_js', sanitize_textarea_field($post_data['cwo_cache_exclude_js']));
+    }
+    
+    // Browser Caching
+    $browser_caching_old = $this->get_option('browser_caching_enabled', '0');
+    $browser_caching_new = isset($post_data['cwo_browser_caching_enabled']) ? '1' : '0';
+    $this->update_option('browser_caching_enabled', $browser_caching_new);
+    
+    // .htaccess aktualisieren oder Regeln entfernen
+    if ($browser_caching_new === '1' && $browser_caching_old === '0') {
+        $this->update_htaccess();
+    } elseif ($browser_caching_new === '0' && $browser_caching_old === '1') {
+        $this->remove_htaccess_rules();
+    }
+}
     /**
  * Cache initialisieren
  */

@@ -268,6 +268,11 @@ class CWO_Admin {
                 color: #646970;
                 margin: 0;
             }
+            
+            /* Performance Settings ohne Card */
+            .olpo-performance-settings {
+                background: #fff;
+            }
         ');
     }
     
@@ -323,7 +328,13 @@ class CWO_Admin {
             'performance' => array(
                 'title' => 'Performance',
                 'icon' => 'performance',
-                'modules' => array()
+                'modules' => array(),
+                'sections' => array(
+                    'general' => array(
+                        'title' => 'Allgemein',
+                        'icon' => 'admin-generic'
+                    )
+                )
             )
         );
         
@@ -333,6 +344,8 @@ class CWO_Admin {
                 $categories['email']['modules'][$module_id] = $module;
             } elseif ($module_id === 'debug') {
                 $categories['debug']['modules'][$module_id] = $module;
+            } elseif ($module_id === 'performance') {
+                $categories['performance']['modules'][$module_id] = $module;
             } else {
                 $categories['performance']['modules'][$module_id] = $module;
             }
@@ -498,6 +511,25 @@ class CWO_Admin {
                                                     }
                                                 endforeach;
                                                 ?>
+                                                
+                                            <?php elseif ($cat_id === 'performance' && $section_id === 'general'): ?>
+                                                <!-- Performance Allgemein -->
+                                                <div class="olpo-section-header">
+                                                    <h2 class="olpo-section-title"><?php echo esc_html($section['title']); ?></h2>
+                                                    <p class="olpo-section-description">Optimiere WordPress durch Deaktivierung unnötiger Features</p>
+                                                </div>
+                                                
+                                                <?php 
+                                                foreach ($category['modules'] as $module_id => $module):
+                                                    if ($module_id === 'performance') {
+                                                        ?>
+                                                        <div class="olpo-performance-settings">
+                                                            <?php $module->render_settings(); ?>
+                                                        </div>
+                                                        <?php
+                                                    }
+                                                endforeach;
+                                                ?>
                                             <?php endif; ?>
                                         </div>
                                     <?php 
@@ -507,7 +539,7 @@ class CWO_Admin {
                                 </div>
                                 
                             <?php else: ?>
-                                <!-- Ohne Sidebar (z.B. Performance) -->
+                                <!-- Ohne Sidebar (sollte nicht mehr vorkommen) -->
                                 <div class="olpo-main-content" style="width: 100%;">
                                     <div class="olpo-section-header">
                                         <h2 class="olpo-section-title"><?php echo esc_html($category['title']); ?> Module</h2>
@@ -606,7 +638,7 @@ class CWO_Admin {
                     });
                 });
                 
-                // Module Toggle
+                // Module Toggle (nur für Email und Debug)
                 var form = document.getElementById('olpo-settings-form');
                 var toggles = document.querySelectorAll('.olpo-module-toggle');
                 
@@ -729,286 +761,290 @@ class CWO_Admin {
         
         function cwoLoadDebugLog() {
             var container = document.getElementById('debug-log-container');
-            container.innerHTML = '<span style="color: #888;">Lade Debug-Log...</span>';
-            
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        var response = JSON.parse(xhr.responseText);
-                        if (response.success) {
-                            container.textContent = response.data.content || 'Debug-Log ist leer.';
-                            
-                            var sizeElement = document.getElementById('debug-log-size');
-                            if (sizeElement) {
-                                sizeElement.textContent = response.data.size;
-                            }
-                            
-                            container.scrollTop = container.scrollHeight;
-                        } else {
-                            container.innerHTML = '<span style="color: #ff6b6b;">Fehler beim Laden des Debug-Logs.</span>';
-                        }
-                    } catch(e) {
-                        container.innerHTML = '<span style="color: #ff6b6b;">Fehler beim Parsen der Antwort.</span>';
-                    }
-                } else {
-                    container.innerHTML = '<span style="color: #ff6b6b;">Fehler bei der Anfrage.</span>';
-                }
-            };
-            
-            xhr.send('action=cwo_get_debug_log&nonce=' + debugNonce);
-        }
+            container.innerHTML = '<span style="color:#888;">Lade Debug-Log...</span>';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         
-        function cwoClearDebugLog() {
-        if (!confirm('Möchtest du das Debug-Log wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-                return;
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        container.textContent = response.data.content || 'Debug-Log ist leer.';
+                        
+                        var sizeElement = document.getElementById('debug-log-size');
+                        if (sizeElement) {
+                            sizeElement.textContent = response.data.size;
+                        }
+                        
+                        container.scrollTop = container.scrollHeight;
+                    } else {
+                        container.innerHTML = '<span style="color: #ff6b6b;">Fehler beim Laden des Debug-Logs.</span>';
+                    }
+                } catch(e) {
+                    container.innerHTML = '<span style="color: #ff6b6b;">Fehler beim Parsen der Antwort.</span>';
+                }
+            } else {
+                container.innerHTML = '<span style="color: #ff6b6b;">Fehler bei der Anfrage.</span>';
             }
-            
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        var response = JSON.parse(xhr.responseText);
-                        if (response.success) {
-                            var container = document.getElementById('debug-log-container');
-                            container.innerHTML = '<span style="color: #4ade80;">Debug-Log wurde gelöscht.</span>';
-                            
-                            var sizeElement = document.getElementById('debug-log-size');
-                            if (sizeElement) {
-                                sizeElement.textContent = '0 B';
-                            }
+        };
+        
+        xhr.send('action=cwo_get_debug_log&nonce=' + debugNonce);
+    }
+    
+    function cwoClearDebugLog() {
+        if (!confirm('Möchtest du das Debug-Log wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+            return;
+        }
+        
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        var container = document.getElementById('debug-log-container');
+                        container.innerHTML = '<span style="color: #4ade80;">Debug-Log wurde gelöscht.</span>';
+                        
+                        var sizeElement = document.getElementById('debug-log-size');
+                        if (sizeElement) {
+                            sizeElement.textContent = '0 B';
                         }
-                    } catch(e) {
-                        alert('Fehler beim Parsen der Antwort.');
                     }
+                } catch(e) {
+                    alert('Fehler beim Parsen der Antwort.');
                 }
-            };
-            
-            xhr.send('action=cwo_clear_debug_log&nonce=' + debugNonce);
-        }
+            }
+        };
         
-        function cwoDownloadDebugLog() {
-            var downloadUrl = '<?php echo content_url('debug.log'); ?>';
-            window.open(downloadUrl, '_blank');
-        }
-        </script>
-        <?php
+        xhr.send('action=cwo_clear_debug_log&nonce=' + debugNonce);
     }
     
-    /**
-     * Nur SMTP Settings rendern
-     */
-    private function render_smtp_settings_only($module) {
-        $module->render_settings();
+    function cwoDownloadDebugLog() {
+        var downloadUrl = '<?php echo content_url('debug.log'); ?>';
+        window.open(downloadUrl, '_blank');
     }
+    </script>
+    <?php
+}
+
+/**
+ * Nur SMTP Settings rendern
+ */
+private function render_smtp_settings_only($module) {
+    $module->render_settings();
+}
+
+/**
+ * Email Log Viewer rendern
+ */
+private function render_email_log_viewer($module) {
+    ?>
+    <p class="description" style="margin-bottom: 15px;">
+        Hier werden alle von WordPress versendeten E-Mails protokolliert. Das Log zeigt Empfänger, Betreff, Status und Zeitstempel.
+    </p>
     
-    /**
-     * Email Log Viewer rendern
-     */
-    private function render_email_log_viewer($module) {
-        ?>
-        <p class="description" style="margin-bottom: 15px;">
-            Hier werden alle von WordPress versendeten E-Mails protokolliert. Das Log zeigt Empfänger, Betreff, Status und Zeitstempel.
-        </p>
-        
-        <div style="margin: 15px 0;">
-            <button type="button" class="button button-primary" onclick="cwoLoadEmailLog()">
-                <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Aktualisieren
-            </button>
-            <button type="button" class="button" onclick="cwoClearEmailLog()" style="color: #b32d2e;">
-                <span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Log leeren
-            </button>
-        </div>
-        
-        <div id="email-log-container" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; overflow: hidden;">
-            <table class="wp-list-table widefat fixed striped" style="margin: 0;">
-                <thead>
-                    <tr>
-                        <th style="width: 15%;">Zeit</th>
-                        <th style="width: 20%;">Empfänger</th>
-                        <th style="width: 35%;">Betreff</th>
-                        <th style="width: 15%;">Status</th>
-                        <th style="width: 15%;">Aktion</th>
-                    </tr>
-                </thead>
-                <tbody id="email-log-tbody">
-                    <tr>
-                        <td colspan="5" style="text-align: center; padding: 20px; color: #646970;">
-                            Klicke auf "Aktualisieren" um das E-Mail Log zu laden...
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        
-        <!-- Email Detail Modal -->
-        <div id="email-detail-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100000; align-items: center; justify-content: center;">
-            <div style="background: #fff; max-width: 800px; max-height: 90vh; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                <div style="padding: 20px; border-bottom: 1px solid #ccd0d4; display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="margin: 0;">E-Mail Details</h2>
-                    <button type="button" class="button" onclick="cwoCloseEmailDetail()" style="padding: 5px 10px;">×</button>
-                </div>
-                <div id="email-detail-content" style="padding: 20px;">
-                    <!-- Wird dynamisch gefüllt -->
-                </div>
+    <div style="margin: 15px 0;">
+        <button type="button" class="button button-primary" onclick="cwoLoadEmailLog()">
+            <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Aktualisieren
+        </button>
+        <button type="button" class="button" onclick="cwoClearEmailLog()" style="color: #b32d2e;">
+            <span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Log leeren
+        </button>
+    </div>
+    
+    <div id="email-log-container" style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; overflow: hidden;">
+        <table class="wp-list-table widefat fixed striped" style="margin: 0;">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">Zeit</th>
+                    <th style="width: 20%;">Empfänger</th>
+                    <th style="width: 35%;">Betreff</th>
+                    <th style="width: 15%;">Status</th>
+                    <th style="width: 15%;">Aktion</th>
+                </tr>
+            </thead>
+            <tbody id="email-log-tbody">
+                <tr>
+                    <td colspan="5" style="text-align: center; padding: 20px; color: #646970;">
+                        Klicke auf "Aktualisieren" um das E-Mail Log zu laden...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Email Detail Modal -->
+    <div id="email-detail-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100000; align-items: center; justify-content: center;">
+        <div style="background: #fff; max-width: 800px; max-height: 90vh; overflow-y: auto; border-radius: 4px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+            <div style="padding: 20px; border-bottom: 1px solid #ccd0d4; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="margin: 0;">E-Mail Details</h2>
+                <button type="button" class="button" onclick="cwoCloseEmailDetail()" style="padding: 5px 10px;">×</button>
+            </div>
+            <div id="email-detail-content" style="padding: 20px;">
+                <!-- Wird dynamisch gefüllt -->
             </div>
         </div>
+    </div>
+    
+    <script type="text/javascript">
+    var emailLogNonce = '<?php echo wp_create_nonce('cwo_email_log_nonce'); ?>';
+    
+    function cwoLoadEmailLog() {
+        var tbody = document.getElementById('email-log-tbody');
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Lade E-Mail Log...</td></tr>';
         
-        <script type="text/javascript">
-        var emailLogNonce = '<?php echo wp_create_nonce('cwo_email_log_nonce'); ?>';
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         
-        function cwoLoadEmailLog() {
-            var tbody = document.getElementById('email-log-tbody');
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">Lade E-Mail Log...</td></tr>';
-            
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        var response = JSON.parse(xhr.responseText);
-                        if (response.success && response.data.emails.length > 0) {
-                            var html = '';
-                            response.data.emails.forEach(function(email) {
-                                var statusColor = email.status === 'success' ? '#46b450' : '#dc3232';
-                                var statusText = email.status === 'success' ? 'Erfolg' : 'Fehler';
-                                
-                                html += '<tr>';
-                                html += '<td>' + email.time + '</td>';
-                                html += '<td>' + email.to + '</td>';
-                                html += '<td>' + email.subject + '</td>';
-                                html += '<td><span style="color: ' + statusColor + '; font-weight: 600;">● ' + statusText + '</span></td>';
-                                html += '<td><button type="button" class="button button-small" onclick="cwoShowEmailDetail(' + email.id + ')">Details</button></td>';
-                                html += '</tr>';
-                            });
-                            tbody.innerHTML = html;
-                        } else {
-                            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #646970;">Keine E-Mails im Log vorhanden.</td></tr>';
-                        }
-                    } catch(e) {
-                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc3232;">Fehler beim Laden des Logs.</td></tr>';
-                    }
-                }
-            };
-            
-            xhr.send('action=cwo_get_email_log&nonce=' + emailLogNonce);
-        }
-        
-        function cwoShowEmailDetail(emailId) {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        var response = JSON.parse(xhr.responseText);
-                        if (response.success) {
-                            var email = response.data;
-                            var html = '<table class="form-table">';
-                            html += '<tr><th>Zeit:</th><td>' + email.time + '</td></tr>';
-                            html += '<tr><th>Empfänger:</th><td>' + email.to + '</td></tr>';
-                            html += '<tr><th>Betreff:</th><td>' + email.subject + '</td></tr>';
-                            html += '<tr><th>Status:</th><td>' + (email.status === 'success' ? '<span style="color: #46b450;">✓ Erfolg</span>' : '<span style="color: #dc3232;">✗ Fehler</span>') + '</td></tr>';
-                            if (email.error) {
-                                html += '<tr><th>Fehler:</th><td style="color: #dc3232;">' + email.error + '</td></tr>';
-                            }
-                            html += '<tr><th>Nachricht:</th><td><pre style="background: #f6f7f7; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">' + email.message + '</pre></td></tr>';
-                            html += '<tr><th>Header:</th><td><pre style="background: #f6f7f7; padding: 15px; border-radius: 4px; max-height: 200px; overflow-y: auto; font-size: 11px;">' + email.headers + '</pre></td></tr>';
-                            html += '</table>';
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success && response.data.emails.length > 0) {
+                        var html = '';
+                        response.data.emails.forEach(function(email) {
+                            var statusColor = email.status === 'success' ? '#46b450' : '#dc3232';
+                            var statusText = email.status === 'success' ? 'Erfolg' : 'Fehler';
                             
-                            document.getElementById('email-detail-content').innerHTML = html;
-                            document.getElementById('email-detail-modal').style.display = 'flex';
-                        }
-                    } catch(e) {
-                        alert('Fehler beim Laden der E-Mail Details.');
+                            html += '<tr>';
+                            html += '<td>' + email.time + '</td>';
+                            html += '<td>' + email.to + '</td>';
+                            html += '<td>' + email.subject + '</td>';
+                            html += '<td><span style="color: ' + statusColor + '; font-weight: 600;">● ' + statusText + '</span></td>';
+                            html += '<td><button type="button" class="button button-small" onclick="cwoShowEmailDetail(' + email.id + ')">Details</button></td>';
+                            html += '</tr>';
+                        });
+                        tbody.innerHTML = html;
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #646970;">Keine E-Mails im Log vorhanden.</td></tr>';
                     }
+                } catch(e) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc3232;">Fehler beim Laden des Logs.</td></tr>';
                 }
-            };
-            
-            xhr.send('action=cwo_get_email_detail&nonce=' + emailLogNonce + '&email_id=' + emailId);
-        }
-        
-        function cwoCloseEmailDetail() {
-            document.getElementById('email-detail-modal').style.display = 'none';
-        }
-        
-        function cwoClearEmailLog() {
-            if (!confirm('Möchtest du das E-Mail Log wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
-                return;
             }
-            
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        var response = JSON.parse(xhr.responseText);
-                        if (response.success) {
-                            cwoLoadEmailLog();
-                        }
-                    } catch(e) {
-                        alert('Fehler beim Löschen des Logs.');
-                    }
-                }
-            };
-            
-            xhr.send('action=cwo_clear_email_log&nonce=' + emailLogNonce);
-        }
+        };
         
-        // Modal schließen bei Klick außerhalb
-        document.addEventListener('DOMContentLoaded', function() {
-            var modal = document.getElementById('email-detail-modal');
-            if (modal) {
-                modal.addEventListener('click', function(e) {
-                    if (e.target === this) {
-                        cwoCloseEmailDetail();
-                    }
-                });
-            }
-        });
-        </script>
-        <?php
+        xhr.send('action=cwo_get_email_log&nonce=' + emailLogNonce);
     }
     
-    /**
-     * Einstellungen speichern
-     */
-    private function save_settings() {
-        $optimizer = Custom_WP_Optimizer::get_instance();
-        $all_modules = array();
+    function cwoShowEmailDetail(emailId) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         
-        foreach ($optimizer->get_modules() as $module_id => $module) {
-            $all_modules[$module_id] = '0';
-        }
-        
-        if (isset($_POST['cwo_modules']) && is_array($_POST['cwo_modules'])) {
-            foreach ($_POST['cwo_modules'] as $module_id => $value) {
-                if ($value === '1') {
-                    $all_modules[$module_id] = '1';
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        var email = response.data;
+                        var html = '<table class="form-table">';
+                        html += '<tr><th>Zeit:</th><td>' + email.time + '</td></tr>';
+                        html += '<tr><th>Empfänger:</th><td>' + email.to + '</td></tr>';
+                        html += '<tr><th>Betreff:</th><td>' + email.subject + '</td></tr>';
+                        html += '<tr><th>Status:</th><td>' + (email.status === 'success' ? '<span style="color: #46b450;">✓ Erfolg</span>' : '<span style="color: #dc3232;">✗ Fehler</span>') + '</td></tr>';
+                        if (email.error) {
+                            html += '<tr><th>Fehler:</th><td style="color: #dc3232;">' + email.error + '</td></tr>';
+                        }
+                        html += '<tr><th>Nachricht:</th><td><pre style="background: #f6f7f7; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">' + email.message + '</pre></td></tr>';
+                        html += '<tr><th>Header:</th><td><pre style="background: #f6f7f7; padding: 15px; border-radius: 4px; max-height: 200px; overflow-y: auto; font-size: 11px;">' + email.headers + '</pre></td></tr>';
+                        html += '</table>';
+                        
+                        document.getElementById('email-detail-content').innerHTML = html;
+                        document.getElementById('email-detail-modal').style.display = 'flex';
+                    }
+                } catch(e) {
+                    alert('Fehler beim Laden der E-Mail Details.');
                 }
             }
+        };
+        
+        xhr.send('action=cwo_get_email_detail&nonce=' + emailLogNonce + '&email_id=' + emailId);
+    }
+    
+    function cwoCloseEmailDetail() {
+        document.getElementById('email-detail-modal').style.display = 'none';
+    }
+    
+    function cwoClearEmailLog() {
+        if (!confirm('Möchtest du das E-Mail Log wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+            return;
         }
         
-        update_option('cwo_modules', $all_modules);
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
         
-        foreach ($optimizer->get_modules() as $module_id => $module) {
-            if ($all_modules[$module_id] === '1') {
-                $module->save_settings($_POST);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var response = JSON.parse(xhr.responseText);
+                    if (response.success) {
+                        cwoLoadEmailLog();
+                    }
+                } catch(e) {
+                    alert('Fehler beim Löschen des Logs.');
+                }
+            }
+        };
+        
+        xhr.send('action=cwo_clear_email_log&nonce=' + emailLogNonce);
+    }
+    
+    // Modal schließen bei Klick außerhalb
+    document.addEventListener('DOMContentLoaded', function() {
+        var modal = document.getElementById('email-detail-modal');
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === this) {
+                    cwoCloseEmailDetail();
+                }
+            });
+        }
+    });
+    </script>
+    <?php
+}
+
+/**
+ * Einstellungen speichern
+ */
+private function save_settings() {
+    $optimizer = Custom_WP_Optimizer::get_instance();
+    $all_modules = array();
+    
+    foreach ($optimizer->get_modules() as $module_id => $module) {
+        $all_modules[$module_id] = '0';
+    }
+    
+    if (isset($_POST['cwo_modules']) && is_array($_POST['cwo_modules'])) {
+        foreach ($_POST['cwo_modules'] as $module_id => $value) {
+            if ($value === '1') {
+                $all_modules[$module_id] = '1';
             }
         }
-        
-        add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
-        settings_errors('cwo_messages');
     }
+    
+    // Performance Modul ist immer aktiv (keine Toggle-Aktivierung)
+    if (isset($optimizer->get_modules()['performance'])) {
+        $all_modules['performance'] = '1';
+    }
+    
+    update_option('cwo_modules', $all_modules);
+    
+    foreach ($optimizer->get_modules() as $module_id => $module) {
+        if ($all_modules[$module_id] === '1') {
+            $module->save_settings($_POST);
+        }
+    }
+    
+    add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
+    settings_errors('cwo_messages');
+}
 }

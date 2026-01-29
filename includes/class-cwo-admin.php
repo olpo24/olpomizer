@@ -1028,42 +1028,6 @@ private function render_email_log_viewer($module) {
     </script>
     <?php
 }
-
-/**
- * Einstellungen speichern
- */
-private function save_settings() {
-    $optimizer = Custom_WP_Optimizer::get_instance();
-    $all_modules = array();
-    
-    foreach ($optimizer->get_modules() as $module_id => $module) {
-        $all_modules[$module_id] = '0';
-    }
-    
-    if (isset($_POST['cwo_modules']) && is_array($_POST['cwo_modules'])) {
-        foreach ($_POST['cwo_modules'] as $module_id => $value) {
-            if ($value === '1') {
-                $all_modules[$module_id] = '1';
-            }
-        }
-    }
-    
-    // Performance Modul ist immer aktiv (keine Toggle-Aktivierung)
-    if (isset($optimizer->get_modules()['performance'])) {
-        $all_modules['performance'] = '1';
-    }
-    
-    update_option('cwo_modules', $all_modules);
-    
-    foreach ($optimizer->get_modules() as $module_id => $module) {
-        if ($all_modules[$module_id] === '1') {
-            $module->save_settings($_POST);
-        }
-    }
-    
-    add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
-    settings_errors('cwo_messages');
-}
     /**
  * Performance Cache Settings rendern
  */
@@ -1245,5 +1209,40 @@ private function render_performance_cache($module) {
     }
     </script>
     <?php
+}
+/**
+ * Einstellungen speichern
+ */
+private function save_settings() {
+    $optimizer = Custom_WP_Optimizer::get_instance();
+    $all_modules = array();
+    
+    foreach ($optimizer->get_modules() as $module_id => $module) {
+        $all_modules[$module_id] = '0';
+    }
+    
+    if (isset($_POST['cwo_modules']) && is_array($_POST['cwo_modules'])) {
+        foreach ($_POST['cwo_modules'] as $module_id => $value) {
+            if ($value === '1') {
+                $all_modules[$module_id] = '1';
+            }
+        }
+    }
+    
+    // Performance Modul ist immer aktiv (keine Toggle-Aktivierung)
+    if (isset($optimizer->get_modules()['performance'])) {
+        $all_modules['performance'] = '1';
+    }
+    
+    update_option('cwo_modules', $all_modules);
+    
+    foreach ($optimizer->get_modules() as $module_id => $module) {
+        if ($all_modules[$module_id] === '1') {
+            $module->save_settings($_POST);
+        }
+    }
+    
+    add_settings_error('cwo_messages', 'cwo_message', 'Einstellungen gespeichert', 'updated');
+    settings_errors('cwo_messages');
 }
 }

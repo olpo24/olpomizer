@@ -339,7 +339,8 @@ class CWO_Admin {
             'icon' => 'database'
         )
     )
-),
+)
+			);
         
         // Module zuordnen
         foreach ($modules as $module_id => $module) {

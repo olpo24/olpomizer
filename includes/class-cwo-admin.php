@@ -326,17 +326,20 @@ class CWO_Admin {
                 )
             ),
             'performance' => array(
-                'title' => 'Performance',
-                'icon' => 'performance',
-                'modules' => array(),
-                'sections' => array(
-                    'general' => array(
-                        'title' => 'Allgemein',
-                        'icon' => 'admin-generic'
-                    )
-                )
-            )
-        );
+    'title' => 'Performance',
+    'icon' => 'performance',
+    'modules' => array(),
+    'sections' => array(
+        'general' => array(
+            'title' => 'Allgemein',
+            'icon' => 'admin-generic'
+        ),
+        'cache' => array(
+            'title' => 'Cache',
+            'icon' => 'database'
+        )
+    )
+),
         
         // Module zuordnen
         foreach ($modules as $module_id => $module) {
@@ -537,7 +540,20 @@ class CWO_Admin {
                                     endforeach; 
                                     ?>
                                 </div>
-                                
+                                <?php elseif ($cat_id === 'performance' && $section_id === 'cache'): ?>
+    <!-- Performance Cache -->
+    <div class="olpo-section-header">
+        <h2 class="olpo-section-title"><?php echo esc_html($section['title']); ?></h2>
+        <p class="olpo-section-description">Konfiguriere den Page Cache für maximale Performance</p>
+    </div>
+    
+    <?php 
+    foreach ($category['modules'] as $module_id => $module):
+        if ($module_id === 'performance') {
+            $this->render_performance_cache($module);
+        }
+    endforeach;
+    ?>
                             <?php else: ?>
                                 <!-- Ohne Sidebar (sollte nicht mehr vorkommen) -->
                                 <div class="olpo-main-content" style="width: 100%;">

@@ -999,4 +999,283 @@ public function remove_htaccess_rules() {
     
     return file_put_contents($htaccess_file, $new_content, LOCK_EX);
 }
+    /**
+ * URLs für Warmup abrufen (AJAX)
+ */
+public function ajax_get_warmup_urls() {
+    check_ajax_referer('cwo_cache_nonce', 'nonce');
+    
+    $scope = $this->get_option('cache_warmup_scope', 'essential');
+    $urls = $this->get_warmup_urls($scope);
+    
+    wp_send_json_success(array(
+        'urls' => $urls,
+        'count' => count($urls)
+    ));
+}
+
+/**
+ * Einzelne URL aufwärmen (AJAX)
+ */
+public function ajax_warmup_url() {
+    check_ajax_referer('cwo_cache_nonce', 'nonce');
+    
+    $url = isset($_POST['url']) ? esc_url_raw($_POST['url']) : '';
+    
+    if (empty($url)) {
+        wp_send_json_error(array('message' => 'Keine URL angegeben'));
+    }
+    
+    // Request an die URL senden (dadurch wird sie gecached)
+    $response = wp_remote_get($url, array(
+        'timeout' => 30,
+        'sslverify' => false,
+        'headers' => array(
+            'User-Agent' => 'OlpoMizer Cache Warmup'
+        )
+    ));
+    
+    if (is_wp_error($response)) {
+        wp_send_json_error(array(
+            'message' => $response->get_error_message(),
+            'url' => $url
+        ));
+    }
+    
+    $status_code = wp_remote_retrieve_response_code($response);
+    
+    wp_send_json_success(array(
+        'url' => $url,
+        'status' => $status_code,
+        'cached' => $status_code === 200
+    ));
+}
+
+// ============================================
+// WARMUP URL SAMMLER
+// ============================================
+
+/**
+ * URLs zum Aufwärmen sammeln
+ */
+private function get_warmup_urls($scope = 'essential') {
+    $urls = array();
+    
+    // IMMER: Homepage
+    $urls[] = home_url('/');
+    
+    // Essential: Homepage + letzte 10 Posts
+    if ($scope === 'essential') {
+        $urls = array_merge($urls, $this->get_recent_post_urls(10));
+    }
+    
+    // Extended: + alle Seiten + Archive
+    elseif ($scope === 'extended') {
+        $urls = array_merge($urls, $this->get_recent_post_urls(20));
+        $urls = array_merge($urls, $this->get_all_page_urls());
+        $urls = array_merge($urls, $this->get_archive_urls());
+    }
+    
+    // Full: Alles
+    elseif ($scope === 'full') {
+        $urls = array_merge($urls, $this->get_all_post_urls());
+        $urls = array_merge($urls, $this->get_all_page_urls());
+        $urls = array_merge($urls, $this->get_archive_urls());
+        $urls = array_merge($urls, $this->get_category_urls());
+        $urls = array_merge($urls, $this->get_tag_urls());
+    }
+    
+    // Duplikate entfernen
+    $urls = array_unique($urls);
+    
+    // Ausgeschlossene URLs filtern
+    $urls = $this->filter_excluded_urls($urls);
+    
+    return array_values($urls);
+}
+
+/**
+ * Letzte X Posts
+ */
+private function get_recent_post_urls($count = 10) {
+    $urls = array();
+    
+    $posts = get_posts(array(
+        'posts_per_page' => $count,
+        'post_status' => 'publish',
+        'post_type' => 'post'
+    ));
+    
+    foreach ($posts as $post) {
+        $urls[] = get_permalink($post->ID);
+    }
+    
+    return $urls;
+}
+
+/**
+ * Alle Posts
+ */
+private function get_all_post_urls() {
+    $urls = array();
+    
+    $posts = get_posts(array(
+        'posts_per_page' => -1,
+        'post_status' => 'publish',
+        'post_type' => 'post'
+    ));
+    
+    foreach ($posts as $post) {
+        $urls[] = get_permalink($post->ID);
+    }
+    
+    return $urls;
+}
+
+/**
+ * Alle Seiten
+ */
+private function get_all_page_urls() {
+    $urls = array();
+    
+    $pages = get_pages(array(
+        'post_status' => 'publish'
+    ));
+    
+    foreach ($pages as $page) {
+        $urls[] = get_permalink($page->ID);
+    }
+    
+    return $urls;
+}
+
+/**
+ * Archiv-URLs (Blog-Seite, etc.)
+ */
+private function get_archive_urls() {
+    $urls = array();
+    
+    // Blog-Seite
+    if (get_option('page_for_posts')) {
+        $urls[] = get_permalink(get_option('page_for_posts'));
+    }
+    
+    return $urls;
+}
+
+/**
+ * Kategorie-URLs
+ */
+private function get_category_urls() {
+    $urls = array();
+    
+    $categories = get_categories(array(
+        'hide_empty' => true
+    ));
+    
+    foreach ($categories as $category) {
+        $urls[] = get_category_link($category->term_id);
+    }
+    
+    return $urls;
+}
+
+/**
+ * Tag-URLs
+ */
+private function get_tag_urls() {
+    $urls = array();
+    
+    $tags = get_tags(array(
+        'hide_empty' => true
+    ));
+    
+    foreach ($tags as $tag) {
+        $urls[] = get_tag_link($tag->term_id);
+    }
+    
+    return $urls;
+}
+
+/**
+ * Ausgeschlossene URLs filtern
+ */
+private function filter_excluded_urls($urls) {
+    $excluded_patterns = $this->get_option('cache_exclude_urls', '');
+    
+    if (empty($excluded_patterns)) {
+        return $urls;
+    }
+    
+    $patterns = array_filter(array_map('trim', explode("\n", $excluded_patterns)));
+    $filtered_urls = array();
+    
+    foreach ($urls as $url) {
+        $url_path = parse_url($url, PHP_URL_PATH);
+        $exclude = false;
+        
+        foreach ($patterns as $pattern) {
+            $regex = str_replace(
+                array('\*', '\?'),
+                array('.*', '.'),
+                preg_quote($pattern, '#')
+            );
+            
+            if (preg_match('#^' . $regex . '$#i', $url_path)) {
+                $exclude = true;
+                break;
+            }
+        }
+        
+        if (!$exclude) {
+            $filtered_urls[] = $url;
+        }
+    }
+    
+    return $filtered_urls;
+}
+
+// ============================================
+// AUTO-WARMUP NACH POST UPDATE
+// ============================================
+
+/**
+ * Automatischer Warmup nach Post-Update
+ */
+public function auto_warmup_on_save($post_id) {
+    // Nur wenn Auto-Warmup aktiviert ist
+    if ($this->get_option('cache_auto_warmup', '0') !== '1') {
+        return;
+    }
+    
+    // Keine Revisions
+    if (wp_is_post_revision($post_id)) {
+        return;
+    }
+    
+    // Nur published Posts
+    if (get_post_status($post_id) !== 'publish') {
+        return;
+    }
+    
+    // Post-URL direkt aufwärmen
+    $url = get_permalink($post_id);
+    
+    wp_remote_get($url, array(
+        'blocking' => false, // Non-blocking!
+        'timeout' => 0.01,
+        'headers' => array(
+            'User-Agent' => 'OlpoMizer Auto-Warmup'
+        )
+    ));
+    
+    // Optional: Auch Homepage aufwärmen (da dort neue Posts erscheinen)
+    wp_remote_get(home_url('/'), array(
+        'blocking' => false,
+        'timeout' => 0.01,
+        'headers' => array(
+            'User-Agent' => 'OlpoMizer Auto-Warmup'
+        )
+    ));
+}
 }

@@ -101,7 +101,15 @@ class CWO_Performance_Module extends CWO_Module_Base {
 if ($this->get_option('cache_enabled') === '1') {
     $this->init_cache();
 }
+// HIER HINZUFÜGEN:
+// AJAX Handler für Cache Warmup
+add_action('wp_ajax_cwo_get_warmup_urls', array($this, 'ajax_get_warmup_urls'));
+add_action('wp_ajax_cwo_warmup_url', array($this, 'ajax_warmup_url'));
 
+// Auto-Warmup bei Post-Update
+if ($this->get_option('cache_auto_warmup', '0') === '1') {
+    add_action('save_post', array($this, 'auto_warmup_on_save'), 10, 1);
+}
 // Browser Caching (.htaccess)
 if ($this->get_option('browser_caching_enabled') === '1') {
     $this->enable_browser_caching();
@@ -593,6 +601,7 @@ add_action('wp_ajax_cwo_clear_cache', array($this, 'ajax_clear_cache'));
         if (isset($post_data['cwo_perf_empty_trash_days'])) {
             $this->update_option('empty_trash_days', intval($post_data['cwo_perf_empty_trash_days']));
         }
+        //Cache Settings
     $cache_enabled_old = $this->get_option('cache_enabled', '0');
     $cache_enabled_new = isset($post_data['cwo_cache_enabled']) ? '1' : '0';
     $this->update_option('cache_enabled', $cache_enabled_new);
@@ -606,7 +615,16 @@ add_action('wp_ajax_cwo_clear_cache', array($this, 'ajax_clear_cache'));
     if (isset($post_data['cwo_cache_exclude_js'])) {
         $this->update_option('cache_exclude_js', sanitize_textarea_field($post_data['cwo_cache_exclude_js']));
     }
-    
+    // Cache Warmup Settings
+$this->update_option('cache_auto_warmup', isset($post_data['cwo_cache_auto_warmup']) ? '1' : '0');
+
+if (isset($post_data['cwo_cache_warmup_scope'])) {
+    $this->update_option('cache_warmup_scope', sanitize_text_field($post_data['cwo_cache_warmup_scope']));
+}
+
+if (isset($post_data['cwo_cache_warmup_delay'])) {
+    $this->update_option('cache_warmup_delay', intval($post_data['cwo_cache_warmup_delay']));
+}
     // Browser Caching
     $browser_caching_old = $this->get_option('browser_caching_enabled', '0');
     $browser_caching_new = isset($post_data['cwo_browser_caching_enabled']) ? '1' : '0';

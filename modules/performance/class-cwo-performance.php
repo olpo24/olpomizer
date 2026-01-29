@@ -97,6 +97,18 @@ class CWO_Performance_Module extends CWO_Module_Base {
         
         // AJAX Handler für Transients aufräumen
         add_action('wp_ajax_cwo_clean_transients', array($this, 'ajax_clean_transients'));
+    // Cache aktivieren
+if ($this->get_option('cache_enabled') === '1') {
+    $this->init_cache();
+}
+
+// Browser Caching (.htaccess)
+if ($this->get_option('browser_caching_enabled') === '1') {
+    $this->enable_browser_caching();
+}
+
+// AJAX Handlers
+add_action('wp_ajax_cwo_clear_cache', array($this, 'ajax_clear_cache'));
     }
     
     /**
@@ -582,4 +594,366 @@ class CWO_Performance_Module extends CWO_Module_Base {
             $this->update_option('empty_trash_days', intval($post_data['cwo_perf_empty_trash_days']));
         }
     }
+    /**
+ * Cache initialisieren
+ */
+private function init_cache() {
+    // Cache Verzeichnis erstellen
+    $cache_dir = WP_CONTENT_DIR . '/cache/olpomizer/';
+    if (!file_exists($cache_dir)) {
+        wp_mkdir_p($cache_dir);
+    }
+    
+    // Cache für Frontend-Seiten
+    if (!is_admin() && !is_user_logged_in()) {
+        add_action('template_redirect', array($this, 'serve_cached_page'), 1);
+        add_action('shutdown', array($this, 'cache_page'), 999);
+    }
+    
+    // Cache bei Post-Updates leeren
+    add_action('save_post', array($this, 'clear_post_cache'));
+    add_action('deleted_post', array($this, 'clear_post_cache'));
+    add_action('switch_theme', array($this, 'clear_all_cache'));
+    
+    // CSS/JS Cache-Kontrolle
+    add_filter('style_loader_src', array($this, 'maybe_exclude_from_cache'), 10, 2);
+    add_filter('script_loader_src', array($this, 'maybe_exclude_from_cache'), 10, 2);
+}
+
+/**
+ * Gecachte Seite ausliefern
+ */
+public function serve_cached_page() {
+    // Prüfen ob URL ausgeschlossen ist
+    if ($this->is_url_excluded()) {
+        return;
+    }
+    
+    // Keine gecachte Version für POST-Requests
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        return;
+    }
+    
+    $cache_file = $this->get_cache_file_path();
+    
+    // Cache-Datei existiert und ist gültig
+    if (file_exists($cache_file)) {
+        $cache_time = filemtime($cache_file);
+        $cache_lifetime = 3600; // 1 Stunde
+        
+        if ((time() - $cache_time) < $cache_lifetime) {
+            header('X-OlpoMizer-Cache: HIT');
+            readfile($cache_file);
+            exit;
+        } else {
+            // Abgelaufener Cache löschen
+            @unlink($cache_file);
+        }
+    }
+}
+
+/**
+ * Seite cachen
+ */
+public function cache_page() {
+    // Nicht cachen wenn URL ausgeschlossen ist
+    if ($this->is_url_excluded()) {
+        return;
+    }
+    
+    // Nicht cachen bei Fehlern oder Redirects
+    if (is_404() || is_search() || http_response_code() !== 200) {
+        return;
+    }
+    
+    $cache_file = $this->get_cache_file_path();
+    $output = ob_get_contents();
+    
+    if ($output && strlen($output) > 0) {
+        // Cache-Verzeichnis sicherstellen
+        $cache_dir = dirname($cache_file);
+        if (!file_exists($cache_dir)) {
+            wp_mkdir_p($cache_dir);
+        }
+        
+        // HTML-Kommentar mit Cache-Info hinzufügen
+        $output .= "\n<!-- Cached by OlpoMizer on " . date('Y-m-d H:i:s') . " -->";
+        
+        file_put_contents($cache_file, $output, LOCK_EX);
+    }
+}
+
+/**
+ * Cache-Dateipfad generieren
+ */
+private function get_cache_file_path() {
+    $url = $_SERVER['REQUEST_URI'];
+    $cache_key = md5($url);
+    
+    $cache_dir = WP_CONTENT_DIR . '/cache/olpomizer/';
+    
+    return $cache_dir . $cache_key . '.html';
+}
+
+/**
+ * Prüfen ob URL vom Cache ausgeschlossen ist
+ */
+private function is_url_excluded() {
+    $current_url = $_SERVER['REQUEST_URI'];
+    $excluded_urls = $this->get_option('cache_exclude_urls', '');
+    
+    if (empty($excluded_urls)) {
+        return false;
+    }
+    
+    $patterns = array_filter(array_map('trim', explode("\n", $excluded_urls)));
+    
+    foreach ($patterns as $pattern) {
+        // Wildcard-Pattern in Regex umwandeln
+        $regex = str_replace(
+            array('\*', '\?'),
+            array('.*', '.'),
+            preg_quote($pattern, '#')
+        );
+        
+        if (preg_match('#^' . $regex . '$#i', $current_url)) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * CSS/JS vom Cache ausschließen
+ */
+public function maybe_exclude_from_cache($src, $handle) {
+    // Prüfen ob es eine CSS oder JS Datei ist
+    $is_css = strpos($src, '.css') !== false;
+    $is_js = strpos($src, '.js') !== false;
+    
+    if (!$is_css && !$is_js) {
+        return $src;
+    }
+    
+    // Ausschlussliste laden
+    $exclude_option = $is_css ? 'cache_exclude_css' : 'cache_exclude_js';
+    $excluded_files = $this->get_option($exclude_option, '');
+    
+    if (empty($excluded_files)) {
+        return $src;
+    }
+    
+    $patterns = array_filter(array_map('trim', explode("\n", $excluded_files)));
+    
+    foreach ($patterns as $pattern) {
+        if (strpos($src, $pattern) !== false || fnmatch($pattern, $src)) {
+            // Version-Parameter hinzufügen um Browser-Cache zu umgehen
+            $separator = strpos($src, '?') !== false ? '&' : '?';
+            return $src . $separator . 'nocache=' . time();
+        }
+    }
+    
+    return $src;
+}
+
+/**
+ * Post-spezifischen Cache leeren
+ */
+public function clear_post_cache($post_id) {
+    $post_url = get_permalink($post_id);
+    
+    if ($post_url) {
+        $cache_key = md5(parse_url($post_url, PHP_URL_PATH));
+        $cache_file = WP_CONTENT_DIR . '/cache/olpomizer/' . $cache_key . '.html';
+        
+        if (file_exists($cache_file)) {
+            @unlink($cache_file);
+        }
+    }
+}
+
+/**
+ * Gesamten Cache leeren
+ */
+public function clear_all_cache() {
+    $cache_dir = WP_CONTENT_DIR . '/cache/olpomizer/';
+    
+    if (!is_dir($cache_dir)) {
+        return;
+    }
+    
+    $files = glob($cache_dir . '*.html');
+    
+    foreach ($files as $file) {
+        if (is_file($file)) {
+            @unlink($file);
+        }
+    }
+    
+    // Letzte Leerung speichern
+    $this->update_option('cache_last_cleared', current_time('mysql'));
+}
+
+/**
+ * Cache-Statistiken abrufen
+ */
+public function get_cache_stats() {
+    $cache_dir = WP_CONTENT_DIR . '/cache/olpomizer/';
+    
+    $stats = array(
+        'files' => 0,
+        'size' => '0 B',
+        'last_cleared' => 'Nie'
+    );
+    
+    if (!is_dir($cache_dir)) {
+        return $stats;
+    }
+    
+    $files = glob($cache_dir . '*.html');
+    $stats['files'] = count($files);
+    
+    $total_size = 0;
+    foreach ($files as $file) {
+        $total_size += filesize($file);
+    }
+    $stats['size'] = size_format($total_size);
+    
+    $last_cleared = $this->get_option('cache_last_cleared');
+    if ($last_cleared) {
+        $stats['last_cleared'] = date_i18n('d.m.Y H:i', strtotime($last_cleared));
+    }
+    
+    return $stats;
+}
+
+/**
+ * Cache leeren (AJAX)
+ */
+public function ajax_clear_cache() {
+    check_ajax_referer('cwo_cache_nonce', 'nonce');
+    
+    $this->clear_all_cache();
+    
+    wp_send_json_success(array(
+        'message' => 'Cache erfolgreich geleert!'
+    ));
+}
+
+/**
+ * Browser Caching aktivieren
+ */
+private function enable_browser_caching() {
+    add_action('admin_init', array($this, 'update_htaccess'));
+}
+
+/**
+ * .htaccess aktualisieren
+ */
+public function update_htaccess() {
+    $htaccess_file = ABSPATH . '.htaccess';
+    
+    if (!is_writable($htaccess_file)) {
+        return false;
+    }
+    
+    $current_content = file_get_contents($htaccess_file);
+    $marker_begin = '# BEGIN OlpoMizer Browser Caching';
+    $marker_end = '# END OlpoMizer Browser Caching';
+    
+    // Alte Regeln entfernen falls vorhanden
+    $pattern = '/' . preg_quote($marker_begin, '/') . '.*?' . preg_quote($marker_end, '/') . '\s*/s';
+    $current_content = preg_replace($pattern, '', $current_content);
+    
+    // Neue Regeln hinzufügen
+    $rules = $this->get_htaccess_rules();
+    $new_content = $marker_begin . "\n" . $rules . "\n" . $marker_end . "\n\n" . $current_content;
+    
+    return file_put_contents($htaccess_file, $new_content, LOCK_EX);
+}
+
+/**
+ * .htaccess Regeln generieren
+ */
+public function get_htaccess_rules() {
+    return '<IfModule mod_expires.c>
+    ExpiresActive On
+    
+    # Images
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+    
+    # Video
+    ExpiresByType video/mp4 "access plus 1 year"
+    ExpiresByType video/mpeg "access plus 1 year"
+    
+    # CSS, JavaScript
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    
+    # Fonts
+    ExpiresByType font/ttf "access plus 1 year"
+    ExpiresByType font/otf "access plus 1 year"
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType application/font-woff "access plus 1 year"
+    
+    # Documents
+    ExpiresByType application/pdf "access plus 1 month"
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Cache-Control für verschiedene Dateitypen
+    <FilesMatch "\.(jpg|jpeg|png|gif|webp|svg|ico)$">
+        Header set Cache-Control "max-age=31536000, public"
+    </FilesMatch>
+    
+    <FilesMatch "\.(css|js)$">
+        Header set Cache-Control "max-age=2592000, public"
+    </FilesMatch>
+    
+    <FilesMatch "\.(woff|woff2|ttf|otf|eot)$">
+        Header set Cache-Control "max-age=31536000, public"
+    </FilesMatch>
+    
+    # ETags entfernen
+    Header unset ETag
+</IfModule>
+
+# ETags deaktivieren
+FileETag None
+
+# Kompression aktivieren
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>';
+}
+
+/**
+ * .htaccess Regeln entfernen (bei Deaktivierung)
+ */
+public function remove_htaccess_rules() {
+    $htaccess_file = ABSPATH . '.htaccess';
+    
+    if (!is_writable($htaccess_file)) {
+        return false;
+    }
+    
+    $current_content = file_get_contents($htaccess_file);
+    $marker_begin = '# BEGIN OlpoMizer Browser Caching';
+    $marker_end = '# END OlpoMizer Browser Caching';
+    
+    // Regeln entfernen
+    $pattern = '/' . preg_quote($marker_begin, '/') . '.*?' . preg_quote($marker_end, '/') . '\s*/s';
+    $new_content = preg_replace($pattern, '', $current_content);
+    
+    return file_put_contents($htaccess_file, $new_content, LOCK_EX);
+}
 }

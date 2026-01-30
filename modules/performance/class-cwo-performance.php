@@ -850,22 +850,43 @@ public function get_cache_stats() {
         'last_cleared' => 'Nie'
     );
     
+    // Cache-Verzeichnis erstellen falls nicht vorhanden
     if (!is_dir($cache_dir)) {
+        wp_mkdir_p($cache_dir);
         return $stats;
     }
     
-    $files = glob($cache_dir . '*.html');
+    // Dateien zählen mit Fehlerbehandlung
+    $files = @glob($cache_dir . '*.html');
+    if ($files === false || !is_array($files)) {
+        $files = array();
+    }
+    
     $stats['files'] = count($files);
     
+    // Gesamtgröße berechnen
     $total_size = 0;
     foreach ($files as $file) {
-        $total_size += filesize($file);
+        if (file_exists($file) && is_readable($file)) {
+            $size = @filesize($file);
+            if ($size !== false) {
+                $total_size += $size;
+            }
+        }
     }
-    $stats['size'] = size_format($total_size);
     
-    $last_cleared = $this->get_option('cache_last_cleared');
-    if ($last_cleared) {
-        $stats['last_cleared'] = date_i18n('d.m.Y H:i', strtotime($last_cleared));
+    // Größe formatieren
+    if ($total_size > 0) {
+        $stats['size'] = size_format($total_size);
+    }
+    
+    // Letzte Leerung
+    $last_cleared = $this->get_option('cache_last_cleared', '');
+    if (!empty($last_cleared)) {
+        $timestamp = strtotime($last_cleared);
+        if ($timestamp !== false) {
+            $stats['last_cleared'] = date_i18n('d.m.Y H:i', $timestamp);
+        }
     }
     
     return $stats;

@@ -641,7 +641,6 @@ if (isset($post_data['cwo_cache_warmup_delay'])) {
  * Cache initialisieren
  */
 private function init_cache() {
-    // Cache Verzeichnis erstellen
     $cache_dir = WP_CONTENT_DIR . '/cache/olpomizer/';
     if (!file_exists($cache_dir)) {
         wp_mkdir_p($cache_dir);
@@ -651,10 +650,8 @@ private function init_cache() {
     if (!is_admin() && !is_user_logged_in()) {
         add_action('template_redirect', array($this, 'serve_cached_page'), 1);
         
-        // WICHTIG: Output Buffering STARTEN
-        add_action('template_redirect', array($this, 'start_output_buffering'), 2);
-        
-        add_action('shutdown', array($this, 'cache_page'), 999);
+        // NEU: Callback-basiertes Buffering statt shutdown Hook
+        add_action('template_redirect', array($this, 'start_cache_buffer'), 2);
     }
     
     // Cache bei Post-Updates leeren
@@ -667,37 +664,32 @@ private function init_cache() {
     add_filter('script_loader_src', array($this, 'maybe_exclude_from_cache'), 10, 2);
 }
 /**
- * Output Buffering starten
+ * Cache Buffer mit Callback starten
  */
-public function start_output_buffering() {
-    // Nur wenn URL nicht ausgeschlossen ist
+public function start_cache_buffer() {
+    // Nicht cachen wenn ausgeschlossen
     if ($this->is_url_excluded()) {
         return;
     }
     
-    // Nur bei GET-Requests
+    // Nur GET
     if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         return;
     }
     
-    // Nur wenn noch kein Cache existiert oder abgelaufen
+    // Nur wenn Cache abgelaufen oder nicht vorhanden
     $cache_file = $this->get_cache_file_path();
-    $should_cache = false;
-    
-    if (!file_exists($cache_file)) {
-        $should_cache = true;
-    } else {
+    if (file_exists($cache_file)) {
         $cache_time = filemtime($cache_file);
-        $cache_lifetime = 3600; // 1 Stunde
+        $cache_lifetime = 3600;
         
-        if ((time() - $cache_time) >= $cache_lifetime) {
-            $should_cache = true;
+        if ((time() - $cache_time) < $cache_lifetime) {
+            return; // Cache ist noch gültig
         }
     }
     
-    if ($should_cache) {
-        ob_start();
-    }
+    // Output Buffer mit Callback starten
+    ob_start(array($this, 'cache_buffer_callback'));
 }
 /**
  * Gecachte Seite ausliefern
@@ -755,65 +747,54 @@ public function serve_cached_page() {
     header('X-OlpoMizer-Cache: MISS');
 }
 /**
- * Seite cachen
+ * Output Buffer Callback
+ * Wird automatisch aufgerufen wenn der Buffer geleert wird
  */
-public function cache_page() {
-    // Nicht cachen wenn URL ausgeschlossen ist
-    if ($this->is_url_excluded()) {
-        return;
-    }
-    
-    // Nur bei GET-Requests
-    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
-        return;
-    }
-    
-    // Nicht cachen bei Fehlern oder Redirects
-    $status = http_response_code();
-    if (is_404() || is_search() || $status !== 200) {
-        return;
-    }
-    
-    // WICHTIG: Output Buffer holen
-    $output = ob_get_contents();
-    
-    // Nichts zu cachen (zu klein = wahrscheinlich Fehler)
+public function cache_buffer_callback($output) {
+    // Nichts zu cachen
     if (empty($output) || strlen($output) < 100) {
-        return;
+        return $output;
     }
     
-    // Keine Formulare cachen (CSRF-Token Problem)
+    // Status-Checks
+    if (is_404() || is_search() || http_response_code() !== 200) {
+        return $output;
+    }
+    
+    // Keine Formulare cachen
     if (stripos($output, '<form') !== false || stripos($output, 'wp_nonce') !== false) {
-        return;
+        return $output;
     }
     
+    // Cache-Datei Pfad
     $cache_file = $this->get_cache_file_path();
-    
-    // Cache-Verzeichnis sicherstellen
     $cache_dir = dirname($cache_file);
+    
+    // Verzeichnis erstellen
     if (!file_exists($cache_dir)) {
         wp_mkdir_p($cache_dir);
     }
     
-    // Verzeichnis beschreibbar?
+    // Schreibbar?
     if (!is_writable($cache_dir)) {
         error_log('OlpoMizer Cache: Verzeichnis nicht beschreibbar: ' . $cache_dir);
-        return;
+        return $output;
     }
     
-    // HTML-Kommentar mit Cache-Info hinzufügen
-    $cache_info = "\n<!-- Cached by OlpoMizer on " . date('Y-m-d H:i:s') . " -->\n";
-    $cache_info .= "<!-- Cache File: " . basename($cache_file) . " -->";
-    $output .= $cache_info;
+    // Cache-Info hinzufügen
+    $cached_output = $output . "\n<!-- Cached by OlpoMizer on " . date('Y-m-d H:i:s') . " -->";
     
     // Datei schreiben
-    $result = file_put_contents($cache_file, $output, LOCK_EX);
+    $result = file_put_contents($cache_file, $cached_output, LOCK_EX);
     
     if ($result === false) {
-        error_log('OlpoMizer Cache: Konnte Cache-Datei nicht schreiben: ' . $cache_file);
+        error_log('OlpoMizer Cache: Fehler beim Schreiben: ' . $cache_file);
     } else {
-        error_log('OlpoMizer Cache: Datei erfolgreich erstellt: ' . $cache_file . ' (' . size_format($result) . ')');
+        error_log('OlpoMizer Cache: Erfolgreich geschrieben: ' . $cache_file . ' (' . size_format($result) . ')');
     }
+    
+    // WICHTIG: Original-Output zurückgeben
+    return $output;
 }
 /**
  * Cache-Dateipfad generieren

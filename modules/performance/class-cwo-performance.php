@@ -647,9 +647,13 @@ private function init_cache() {
         wp_mkdir_p($cache_dir);
     }
     
-    // Cache für Frontend-Seiten
+    // Cache für Frontend-Seiten (nur für nicht-eingeloggte User)
     if (!is_admin() && !is_user_logged_in()) {
         add_action('template_redirect', array($this, 'serve_cached_page'), 1);
+        
+        // WICHTIG: Output Buffering STARTEN
+        add_action('template_redirect', array($this, 'start_output_buffering'), 2);
+        
         add_action('shutdown', array($this, 'cache_page'), 999);
     }
     

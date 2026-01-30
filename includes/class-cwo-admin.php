@@ -24,6 +24,7 @@ class CWO_Admin {
      * Abhängigkeiten laden
      */
     private function load_dependencies() {
+        // Admin-Interface
         require_once CWO_PLUGIN_DIR . 'includes/admin/class-cwo-admin-page.php';
         require_once CWO_PLUGIN_DIR . 'includes/admin/class-cwo-admin-assets.php';
         require_once CWO_PLUGIN_DIR . 'includes/admin/class-cwo-admin-settings.php';
@@ -32,6 +33,7 @@ class CWO_Admin {
         require_once CWO_PLUGIN_DIR . 'includes/admin/renderers/class-cwo-debug-renderer.php';
         require_once CWO_PLUGIN_DIR . 'includes/admin/renderers/class-cwo-smtp-renderer.php';
         require_once CWO_PLUGIN_DIR . 'includes/admin/renderers/class-cwo-performance-renderer.php';
+        require_once CWO_PLUGIN_DIR . 'includes/admin/renderers/class-cwo-image-renderer.php';
     }
     
     /**

@@ -18,7 +18,14 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Peak Publisher Bootstrap Code basicV1
+/**
+ * Peak Publisher Bootstrap Code basicV1
+ * Keep the code as it is, as it is optimized for several requirements.
+ * 
+ * Compatible with:
+ * - PHP ≥ 5.3
+ * - Wordpress ≥ 5.8
+ */
 add_action('plugin_loaded', function($plugin_full_path) {
     global $wp_version;
     static $done = false;

@@ -13,11 +13,13 @@ class CWO_Admin_Page {
     private $debug_renderer;
     private $smtp_renderer;
     private $performance_renderer;
+    private $image_renderer;
     
     public function __construct() {
         $this->debug_renderer = new CWO_Debug_Renderer();
         $this->smtp_renderer = new CWO_SMTP_Renderer();
         $this->performance_renderer = new CWO_Performance_Renderer();
+        $this->image_renderer = new CWO_Image_Renderer();
     }
     
     /**
@@ -106,6 +108,18 @@ class CWO_Admin_Page {
                     'cache' => array(
                         'title' => 'Cache',
                         'icon' => 'database'
+                    ),
+                    'images' => array(
+                        'title' => 'Bild Optimierung',
+                        'icon' => 'format-image'
+                    ),
+                    'batch' => array(
+                        'title' => 'Batch Verarbeitung',
+                        'icon' => 'images-alt2'
+                    ),
+                    'webp' => array(
+                        'title' => 'WebP Konvertierung',
+                        'icon' => 'image-rotate'
                     )
                 )
             )
@@ -118,6 +132,8 @@ class CWO_Admin_Page {
             } elseif ($module_id === 'debug') {
                 $categories['debug']['modules'][$module_id] = $module;
             } elseif ($module_id === 'performance') {
+                $categories['performance']['modules'][$module_id] = $module;
+            } elseif ($module_id === 'image-optimization') {
                 $categories['performance']['modules'][$module_id] = $module;
             } else {
                 $categories['performance']['modules'][$module_id] = $module;
@@ -238,6 +254,15 @@ class CWO_Admin_Page {
             $this->performance_renderer->render_general_section($section, $category);
         } elseif ($cat_id === 'performance' && $section_id === 'cache') {
             $this->performance_renderer->render_cache_section($section, $category);
+        }
+        
+        // Image Optimization Sections
+        elseif ($cat_id === 'performance' && $section_id === 'images') {
+            $this->image_renderer->render_general_section($section, $category);
+        } elseif ($cat_id === 'performance' && $section_id === 'batch') {
+            $this->image_renderer->render_batch_section($section, $category);
+        } elseif ($cat_id === 'performance' && $section_id === 'webp') {
+            $this->image_renderer->render_webp_section($section, $category);
         }
     }
 }

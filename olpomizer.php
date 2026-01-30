@@ -3,7 +3,7 @@
  * Plugin Name: OlpoMizer
  * Plugin URI: https://olpo.de
  * Description: Modulares WordPress Optimierungs-Plugin mit konfigurierbaren Features
- * Version: 1.5.0
+ * Version: 1.5.1
  * Author: Ole 
  * Author URI: https://olpo.de
  * Text Domain: olpomizer

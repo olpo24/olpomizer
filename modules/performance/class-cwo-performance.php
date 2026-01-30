@@ -666,7 +666,39 @@ private function init_cache() {
     add_filter('style_loader_src', array($this, 'maybe_exclude_from_cache'), 10, 2);
     add_filter('script_loader_src', array($this, 'maybe_exclude_from_cache'), 10, 2);
 }
-
+/**
+ * Output Buffering starten
+ */
+public function start_output_buffering() {
+    // Nur wenn URL nicht ausgeschlossen ist
+    if ($this->is_url_excluded()) {
+        return;
+    }
+    
+    // Nur bei GET-Requests
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        return;
+    }
+    
+    // Nur wenn noch kein Cache existiert oder abgelaufen
+    $cache_file = $this->get_cache_file_path();
+    $should_cache = false;
+    
+    if (!file_exists($cache_file)) {
+        $should_cache = true;
+    } else {
+        $cache_time = filemtime($cache_file);
+        $cache_lifetime = 3600; // 1 Stunde
+        
+        if ((time() - $cache_time) >= $cache_lifetime) {
+            $should_cache = true;
+        }
+    }
+    
+    if ($should_cache) {
+        ob_start();
+    }
+}
 /**
  * Gecachte Seite ausliefern
  */
@@ -677,8 +709,25 @@ public function serve_cached_page() {
     }
     
     // Keine gecachte Version für POST-Requests
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
         return;
+    }
+    
+    // Keine gecachte Version für URLs mit Query-Parametern (außer utm_*)
+    if (!empty($_GET)) {
+        $allowed_params = array('utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term');
+        $has_other_params = false;
+        
+        foreach (array_keys($_GET) as $param) {
+            if (!in_array($param, $allowed_params)) {
+                $has_other_params = true;
+                break;
+            }
+        }
+        
+        if ($has_other_params) {
+            return;
+        }
     }
     
     $cache_file = $this->get_cache_file_path();
@@ -689,7 +738,11 @@ public function serve_cached_page() {
         $cache_lifetime = 3600; // 1 Stunde
         
         if ((time() - $cache_time) < $cache_lifetime) {
+            // Cache-Hit Header setzen
             header('X-OlpoMizer-Cache: HIT');
+            header('X-OlpoMizer-Cache-Time: ' . date('Y-m-d H:i:s', $cache_time));
+            
+            // Cache ausliefern
             readfile($cache_file);
             exit;
         } else {
@@ -697,8 +750,10 @@ public function serve_cached_page() {
             @unlink($cache_file);
         }
     }
+    
+    // Cache-Miss Header setzen (für Debugging)
+    header('X-OlpoMizer-Cache: MISS');
 }
-
 /**
  * Seite cachen
  */
@@ -708,38 +763,85 @@ public function cache_page() {
         return;
     }
     
+    // Nur bei GET-Requests
+    if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+        return;
+    }
+    
     // Nicht cachen bei Fehlern oder Redirects
-    if (is_404() || is_search() || http_response_code() !== 200) {
+    $status = http_response_code();
+    if (is_404() || is_search() || $status !== 200) {
+        return;
+    }
+    
+    // WICHTIG: Output Buffer holen
+    $output = ob_get_contents();
+    
+    // Nichts zu cachen (zu klein = wahrscheinlich Fehler)
+    if (empty($output) || strlen($output) < 100) {
+        return;
+    }
+    
+    // Keine Formulare cachen (CSRF-Token Problem)
+    if (stripos($output, '<form') !== false || stripos($output, 'wp_nonce') !== false) {
         return;
     }
     
     $cache_file = $this->get_cache_file_path();
-    $output = ob_get_contents();
     
-    if ($output && strlen($output) > 0) {
-        // Cache-Verzeichnis sicherstellen
-        $cache_dir = dirname($cache_file);
-        if (!file_exists($cache_dir)) {
-            wp_mkdir_p($cache_dir);
-        }
-        
-        // HTML-Kommentar mit Cache-Info hinzufügen
-        $output .= "\n<!-- Cached by OlpoMizer on " . date('Y-m-d H:i:s') . " -->";
-        
-        file_put_contents($cache_file, $output, LOCK_EX);
+    // Cache-Verzeichnis sicherstellen
+    $cache_dir = dirname($cache_file);
+    if (!file_exists($cache_dir)) {
+        wp_mkdir_p($cache_dir);
+    }
+    
+    // Verzeichnis beschreibbar?
+    if (!is_writable($cache_dir)) {
+        error_log('OlpoMizer Cache: Verzeichnis nicht beschreibbar: ' . $cache_dir);
+        return;
+    }
+    
+    // HTML-Kommentar mit Cache-Info hinzufügen
+    $cache_info = "\n<!-- Cached by OlpoMizer on " . date('Y-m-d H:i:s') . " -->\n";
+    $cache_info .= "<!-- Cache File: " . basename($cache_file) . " -->";
+    $output .= $cache_info;
+    
+    // Datei schreiben
+    $result = file_put_contents($cache_file, $output, LOCK_EX);
+    
+    if ($result === false) {
+        error_log('OlpoMizer Cache: Konnte Cache-Datei nicht schreiben: ' . $cache_file);
+    } else {
+        error_log('OlpoMizer Cache: Datei erfolgreich erstellt: ' . $cache_file . ' (' . size_format($result) . ')');
     }
 }
-
 /**
  * Cache-Dateipfad generieren
  */
 private function get_cache_file_path() {
     $url = $_SERVER['REQUEST_URI'];
-    $cache_key = md5($url);
+    
+    // Query-Parameter entfernen
+    $url_parts = parse_url($url);
+    $clean_url = $url_parts['path'];
+    
+    // Trailing Slash normalisieren
+    $clean_url = rtrim($clean_url, '/');
+    
+    // Hash generieren
+    $cache_key = md5($clean_url);
     
     $cache_dir = WP_CONTENT_DIR . '/cache/olpomizer/';
     
-    return $cache_dir . $cache_key . '.html';
+    // Unterverzeichnis für bessere Organisation (erste 2 Zeichen des Hash)
+    $subdir = substr($cache_key, 0, 2);
+    $cache_subdir = $cache_dir . $subdir . '/';
+    
+    if (!file_exists($cache_subdir)) {
+        wp_mkdir_p($cache_subdir);
+    }
+    
+    return $cache_subdir . $cache_key . '.html';
 }
 
 /**
@@ -747,15 +849,26 @@ private function get_cache_file_path() {
  */
 private function is_url_excluded() {
     $current_url = $_SERVER['REQUEST_URI'];
+    
+    // Standard-Ausschlüsse (immer)
+    $default_excludes = array(
+        '/wp-admin/*',
+        '/wp-login.php',
+        '/wp-json/*',
+        '*/feed/*',
+        '*/xmlrpc.php',
+        '/*/wp-*.php',
+        '/sitemap*.xml',
+    );
+    
+    // User-definierte Ausschlüsse
     $excluded_urls = $this->get_option('cache_exclude_urls', '');
+    $user_patterns = array_filter(array_map('trim', explode("\n", $excluded_urls)));
     
-    if (empty($excluded_urls)) {
-        return false;
-    }
+    // Kombinieren
+    $all_patterns = array_merge($default_excludes, $user_patterns);
     
-    $patterns = array_filter(array_map('trim', explode("\n", $excluded_urls)));
-    
-    foreach ($patterns as $pattern) {
+    foreach ($all_patterns as $pattern) {
         // Wildcard-Pattern in Regex umwandeln
         $regex = str_replace(
             array('\*', '\?'),

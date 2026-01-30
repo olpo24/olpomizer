@@ -147,6 +147,65 @@ class CWO_Performance_Renderer {
                     </td>
                 </tr>
             </table>
+            
+            <hr style="margin: 30px 0;">
+            
+            <h3>Cache Warmup</h3>
+            <?php 
+            $cache_auto_warmup = $module->get_option('cache_auto_warmup', '0');
+            $cache_warmup_scope = $module->get_option('cache_warmup_scope', 'essential');
+            $cache_warmup_delay = $module->get_option('cache_warmup_delay', '100');
+            ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row">Automatischer Warmup</th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="cwo_cache_auto_warmup" value="1" <?php checked($cache_auto_warmup, '1'); ?>>
+                            Cache automatisch aufwärmen nach Post-Updates
+                        </label>
+                        <p class="description">Wärmt die Post-URL und Homepage automatisch nach dem Speichern auf.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Warmup-Umfang</th>
+                    <td>
+                        <select name="cwo_cache_warmup_scope">
+                            <option value="essential" <?php selected($cache_warmup_scope, 'essential'); ?>>Essential (Homepage + 10 neueste Posts)</option>
+                            <option value="extended" <?php selected($cache_warmup_scope, 'extended'); ?>>Extended (+ alle Seiten + Archive)</option>
+                            <option value="full" <?php selected($cache_warmup_scope, 'full'); ?>>Full (alle Inhalte + Kategorien + Tags)</option>
+                        </select>
+                        <p class="description">Bestimmt welche URLs beim manuellen Warmup berücksichtigt werden.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Warmup-Verzögerung</th>
+                    <td>
+                        <input type="number" name="cwo_cache_warmup_delay" value="<?php echo esc_attr($cache_warmup_delay); ?>" min="50" max="5000" step="50" class="small-text"> Millisekunden
+                        <p class="description">Verzögerung zwischen einzelnen Requests beim Warmup (Standard: 100ms).</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Manueller Warmup</th>
+                    <td>
+                        <button type="button" class="button button-primary" onclick="cwoStartCacheWarmup()">
+                            <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Cache jetzt aufwärmen
+                        </button>
+                        <div id="warmup-progress" style="margin-top: 15px; display: none;">
+                            <div style="background: #f6f7f7; padding: 15px; border-radius: 4px;">
+                                <div style="margin-bottom: 10px;">
+                                    <strong>Fortschritt:</strong> 
+                                    <span id="warmup-current">0</span> / <span id="warmup-total">0</span> URLs
+                                </div>
+                                <div style="background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; overflow: hidden; height: 20px;">
+                                    <div id="warmup-bar" style="background: #2271b1; height: 100%; width: 0%; transition: width 0.3s;"></div>
+                                </div>
+                                <div id="warmup-status" style="margin-top: 10px; color: #646970; font-size: 12px;"></div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
             <?php endif; ?>
             
             <hr style="margin: 30px 0;">
@@ -231,6 +290,80 @@ class CWO_Performance_Renderer {
             };
             
             xhr.send('action=cwo_clear_cache&nonce=' + cacheNonce);
+        }
+        
+        // Cache Warmup Funktion
+        function cwoStartCacheWarmup() {
+            var progressDiv = document.getElementById('warmup-progress');
+            var statusDiv = document.getElementById('warmup-status');
+            var currentSpan = document.getElementById('warmup-current');
+            var totalSpan = document.getElementById('warmup-total');
+            var barDiv = document.getElementById('warmup-bar');
+            
+            progressDiv.style.display = 'block';
+            statusDiv.textContent = 'Sammle URLs...';
+            
+            // 1. URLs abrufen
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        var response = JSON.parse(xhr.responseText);
+                        if (response.success && response.data.urls) {
+                            var urls = response.data.urls;
+                            totalSpan.textContent = urls.length;
+                            
+                            // 2. URLs der Reihe nach aufwärmen
+                            var delay = <?php echo intval($module->get_option('cache_warmup_delay', '100')); ?>;
+                            var current = 0;
+                            
+                            function warmupNext() {
+                                if (current >= urls.length) {
+                                    statusDiv.textContent = 'Warmup abgeschlossen! ✓';
+                                    statusDiv.style.color = '#46b450';
+                                    return;
+                                }
+                                
+                                var url = urls[current];
+                                statusDiv.textContent = 'Wärme auf: ' + url;
+                                
+                                var warmupXhr = new XMLHttpRequest();
+                                warmupXhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>', true);
+                                warmupXhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                                
+                                warmupXhr.onload = function() {
+                                    current++;
+                                    currentSpan.textContent = current;
+                                    var percent = (current / urls.length) * 100;
+                                    barDiv.style.width = percent + '%';
+                                    
+                                    setTimeout(warmupNext, delay);
+                                };
+                                
+                                warmupXhr.onerror = function() {
+                                    current++;
+                                    setTimeout(warmupNext, delay);
+                                };
+                                
+                                warmupXhr.send('action=cwo_warmup_url&nonce=' + cacheNonce + '&url=' + encodeURIComponent(url));
+                            }
+                            
+                            warmupNext();
+                        } else {
+                            statusDiv.textContent = 'Fehler beim Abrufen der URLs.';
+                            statusDiv.style.color = 'red';
+                        }
+                    } catch(e) {
+                        statusDiv.textContent = 'Fehler: ' + e.message;
+                        statusDiv.style.color = 'red';
+                    }
+                }
+            };
+            
+            xhr.send('action=cwo_get_warmup_urls&nonce=' + cacheNonce);
         }
         </script>
         <?php

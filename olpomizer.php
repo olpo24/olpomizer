@@ -3,7 +3,7 @@
  * Plugin Name: OlpoMizer
  * Plugin URI: https://olpo.de
  * Description: Modulares WordPress Optimierungs-Plugin mit konfigurierbaren Features
- * Version: 1.4.9
+ * Version: 1.5.0
  * Author: Ole 
  * Author URI: https://olpo.de
  * Text Domain: olpomizer
@@ -17,14 +17,8 @@
 if (!defined('ABSPATH')) {
     exit;
 }
-/**
- * Peak Publisher Bootstrap Code basicV1
- * Keep the code as it is, as it is optimized for several requirements.
- * 
- * Compatible with:
- * - PHP ≥ 5.3
- * - Wordpress ≥ 5.8
- */
+
+// Peak Publisher Bootstrap Code basicV1 (wie im Original)
 add_action('plugin_loaded', function($plugin_full_path) {
     global $wp_version;
     static $done = false;
@@ -34,7 +28,7 @@ add_action('plugin_loaded', function($plugin_full_path) {
     $real_wp_version = function_exists('wp_get_wp_version') ? wp_get_wp_version() : $wp_version;
     $user_agent = 'PeakPublisherBootstrapCode/basicV1; WordPress/' . $real_wp_version . '; ' . home_url( '/' );
     $plugin_basename = plugin_basename($plugin_full_path);
-    require_once ABSPATH . 'wp-admin/includes/plugin.php'; // For WordPress before version 6.8 we need to include this file to ensure the function get_plugin_data() is available.
+    require_once ABSPATH . 'wp-admin/includes/plugin.php';
     $update_url = trailingslashit(sanitize_url( get_plugin_data( $plugin_full_path, false, false )['UpdateURI'] ));
     $host = wp_parse_url($update_url, PHP_URL_HOST);
 
@@ -75,7 +69,7 @@ add_action('plugin_loaded', function($plugin_full_path) {
 }, 10, 1);
 
 // Plugin-Konstanten
-define('CWO_VERSION', '1.0.0');
+define('CWO_VERSION', '1.5.0');
 define('CWO_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CWO_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('CWO_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -121,20 +115,18 @@ class Custom_WP_Optimizer {
         require_once CWO_PLUGIN_DIR . 'modules/smtp/class-cwo-smtp.php';
         require_once CWO_PLUGIN_DIR . 'modules/debug/class-cwo-debug.php';
         require_once CWO_PLUGIN_DIR . 'modules/performance/class-cwo-performance.php';
+        require_once CWO_PLUGIN_DIR . 'modules/image-optimization/class-cwo-image-optimization.php';
     }
     
     /**
      * Module initialisieren
      */
     private function init_modules() {
-        // SMTP Modul registrieren
+        // Module registrieren
         $this->register_module('smtp', new CWO_SMTP_Module());
         $this->register_module('debug', new CWO_Debug_Module());
         $this->register_module('performance', new CWO_Performance_Module());
-        // Hier können weitere Module registriert werden
-        // $this->register_module('image-optimization', new CWO_Image_Module());
-        // $this->register_module('disable-features', new CWO_Disable_Module());
-            
+        $this->register_module('image-optimization', new CWO_Image_Optimization_Module());
     }
     
     /**

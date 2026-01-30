@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Peak Publisher Bootstrap Code basicV1 (wie im Original)
+// Peak Publisher Bootstrap Code basicV1
 add_action('plugin_loaded', function($plugin_full_path) {
     global $wp_version;
     static $done = false;
